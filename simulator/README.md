@@ -16,11 +16,12 @@ From this directory, omit `cd simulator`. Open the printed local URL. `npm test`
 
 ## Present
 
-1. **System architecture:** describe shared source analysis, locale fan-out, explicit quality gates and final rights checks. Select any stage for suggested tools, contracts and failure boundaries.
-2. **Capacity planning:** apply 10× catalog growth and identify offered load above available capacity. Explain why an upstream bottleneck can conceal downstream demand.
-3. **Model economics:** run a controlled comparison. Thirty minutes of demand is admitted into each profile, followed by at most three hours of draining. Undrained results are explicitly flagged.
-4. **Execution traces:** inspect a delivered or blocked derivative and explain stage service time versus queue wait.
-5. **Inspect:** 50 searchable questions across 10 responsibilities, each with an answer, scope statement and evidence navigation. Export the complete Markdown brief.
+1. **Start with the process explanation:** choose full-program dubbing or dubbed highlights. Read the 30-minute worked example and open each phase disclosure. Source videos vary in length according to the selected catalog mix; the source language is English and named destinations are shown.
+2. **System architecture:** describe shared source analysis, locale fan-out, explicit quality gates and final rights checks. Select any stage for suggested tools, contracts and failure boundaries.
+3. **Capacity planning:** apply 10× catalog growth and identify offered load above available capacity. Explain why an upstream bottleneck can conceal downstream demand.
+4. **Model economics:** run a controlled comparison. Thirty minutes of demand is admitted into each profile, followed by at most three hours of draining. Undrained results are explicitly flagged.
+5. **Execution traces:** inspect a delivered or blocked derivative and explain stage service time versus queue wait.
+6. **Inspect:** 50 searchable questions across 10 responsibilities, each with an answer, scope statement and evidence navigation. Export the complete Markdown brief.
 
 See [DEMO.md](docs/DEMO.md) for a seven-minute presentation and [MODEL.md](docs/MODEL.md) for mathematical assumptions.
 
@@ -55,3 +56,7 @@ Configuration and manual review progress are saved in browser local storage. Sha
 ### Follow one package
 
 Choose **Follow a package** on the architecture canvas, or open **Execution traces**. Select an outcome to pin a recorded package. Use **Play story**, previous/next, the scrubber or a graph node to navigate its spans. Commentary explains the observed route, including cache bypass, parallel analysis, locale fan-out, retries, quality gates and final disposition. Each step includes processing time, queue/backoff time and an expandable proposed contract. Playback is independent of the live simulation and preserves recorded timestamps; it is a replay of completed outcomes, not an in-flight debugger.
+
+### Terminology and variable source lengths
+
+Use question-mark disclosures beside controls, metrics and stage names, or dotted technical terms, for hover, keyboard-focus and tap explanations. **Terms & labels** provides a searchable reference. Presets describe incoming catalog distributions; custom bounds describe an observed duration range. Each admitted video captures its sampled length and output plan. Changing the plan applies to future arrivals. Full-program dubbing keeps all source minutes; highlights retain the chosen share as aggregate selected minutes, without claiming exact clip boundaries.

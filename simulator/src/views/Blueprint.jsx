@@ -1,3 +1,4 @@
+import { Terms } from "../components/Help.jsx";
 import React from "react";
 import { Activity, BookOpen, Database, Layers3, Workflow } from "lucide-react";
 
@@ -9,8 +10,11 @@ export default function Blueprint() {
           <span className="eyebrow">TECHNICAL STRATEGY</span>
           <h2>Architecture decisions & alternatives</h2>
           <p>
-            A proposed reference architecture for media transformation at
-            catalog scale.
+            <Terms>
+              {
+                "A proposed reference architecture for media transformation at catalog scale."
+              }
+            </Terms>
           </p>
         </div>
         <BookOpen size={32} />
@@ -20,9 +24,11 @@ export default function Blueprint() {
         <div>
           <h3>Control plane owns decisions. Data plane moves media.</h3>
           <p>
-            Temporal persists workflow history and coordinates activities.
-            Object storage holds immutable artifacts. Independently bounded CPU,
-            GPU, API and reviewer pools execute each stage.
+            <Terms>
+              {
+                "Temporal persists workflow history and coordinates activities. Object storage holds immutable artifacts. Independently bounded CPU, GPU, API and reviewer pools execute each stage."
+              }
+            </Terms>
           </p>
         </div>
       </div>
@@ -118,8 +124,11 @@ export default function Blueprint() {
         </div>
       </div>
       <p className="subtle-note">
-        Created and owned by Hassan Uriostegui. An independent reference
-        architecture for catalog-scale media AI systems.
+        <Terms>
+          {
+            "Created and owned by Hassan Uriostegui. An independent reference architecture for catalog-scale media AI systems."
+          }
+        </Terms>
       </p>
     </div>
   );

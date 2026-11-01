@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { $, download } from "../utils.js";
 
+import { Terms } from "../components/Help.jsx";
 import { REVIEW } from "../review.js";
 
 export default function Inspect({ onNavigate }) {
@@ -177,13 +178,17 @@ export default function Inspect({ onNavigate }) {
             </button>
             {open.has(q.i) && (
               <div className="question-answer">
-                <p>{q.a}</p>
+                <p>
+                  <Terms>{q.a}</Terms>
+                </p>
                 <div className="answer-proof">
                   <span>
                     <Eye size={15} />
                     <b>Evidence & scope</b>
                   </span>
-                  <p>{q.proof}</p>
+                  <p>
+                    <Terms>{q.proof}</Terms>
+                  </p>
                 </div>
                 <div className="answer-actions">
                   <button
@@ -229,9 +234,9 @@ export default function Inspect({ onNavigate }) {
       <div className="review-footnote">
         <ShieldCheck size={17} />
         <p>
-          Inspect the evidence behind each decision. Answers distinguish simulated
-          behavior from proposed design and execution plans; production claims
-          require measured results.
+          Inspect the evidence behind each decision. Answers distinguish
+          simulated behavior from proposed design and execution plans;
+          production claims require measured results.
         </p>
       </div>
     </div>

@@ -6,12 +6,15 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
+import { HelpLabel, Terms } from "./Help.jsx";
+import { stageInfo } from "../workload.js";
 import { STAGES, PROFILES } from "../catalog.js";
 import { $ } from "../utils.js";
 import { Icon, Slider, Toggle } from "./ui.jsx";
 export default function Inspector({ id, snap, onClose, onConfigure }) {
   const [tab, setTab] = useState("design");
-  const n = STAGES.find((x) => x.id === id);
+  const original = STAGES.find((x) => x.id === id);
+  const n = stageInfo(original, snap.config);
   const s = snap.stages[id];
   return (
     <aside className="inspector">
@@ -25,14 +28,19 @@ export default function Inspector({ id, snap, onClose, onConfigure }) {
           <X size={16} />
         </button>
         <span className="mono">
-          {String(STAGES.indexOf(n) + 1).padStart(2, "0")} / 12
+          {String(STAGES.indexOf(original) + 1).padStart(2, "0")} /{" "}
+          {STAGES.length}
         </span>
       </div>
       <div className={"inspector-icon " + n.kind}>
         <Icon name={n.icon} size={25} />
       </div>
-      <h2>{n.name}</h2>
-      <p className="inspector-desc">{n.purpose}</p>
+      <h2>
+        <HelpLabel label={n.name} details={n.purpose} />
+      </h2>
+      <p className="inspector-desc">
+        <Terms>{n.purpose}</Terms>
+      </p>
       <div className="stage-metrics">
         <div>
           <strong>{s.queue}</strong>
@@ -88,11 +96,15 @@ export default function Inspector({ id, snap, onClose, onConfigure }) {
           </section>
           <section className="detail-section">
             <h3>Architecture decision</h3>
-            <p>{n.decision}</p>
+            <p>
+              <Terms>{n.decision}</Terms>
+            </p>
           </section>
           <section className="detail-section">
             <h3>Failure boundary</h3>
-            <p>{n.failure}</p>
+            <p>
+              <Terms>{n.failure}</Terms>
+            </p>
           </section>
           <div className="watch-metrics">
             <Activity size={14} />

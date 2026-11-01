@@ -1,3 +1,4 @@
+import { stageInfo } from "./workload.js";
 import { STAGES, CONNECTIONS } from "./catalog.js";
 
 // Replay recorded spans in completion order; parallel branches are not serialized.
@@ -12,6 +13,7 @@ export function traceState(job, steps, cursor) {
   const seen = new Set(steps.slice(0, cursor + 1).map((s) => s.stage));
   const route = new Set(steps.map((s) => s.stage));
   return {
+    config: { plan: job.plan || (job.clipRatio < 100 ? "highlights" : "full") },
     current: current?.stage,
     seen,
     route,
@@ -47,13 +49,16 @@ export function traceState(job, steps, cursor) {
   };
 }
 export function traceCommentary(job, span, steps) {
-  const stage = STAGES.find((n) => n.id === span.stage);
+  const stage = stageInfo(
+    STAGES.find((n) => n.id === span.stage),
+    { plan: job.plan || (job.clipRatio < 100 ? "highlights" : "full") },
+  );
   const has = (id) => steps.some((s) => s.stage === id);
   const laterAttempt = steps.some(
     (s) => s.stage === "tts" && s.attempt > span.attempt,
   );
   const notes = {
-    ingest: `${job.sourceMinutes} minutes of source media entered as ${job.asset}. Shared source work happens once before any locale-specific processing.`,
+    ingest: `${job.sourceMinutes?.toFixed(1) ?? "unrecorded"} minutes of source media entered as ${job.asset}. Shared source work happens once before any locale-specific processing.`,
     policy:
       job.status === "rights hold" && !has("prepare")
         ? "Admission stopped this package because its rights were revoked. No normalization or model work followed."
@@ -65,13 +70,14 @@ export function traceCommentary(job, span, steps) {
     asr: "The speech-analysis branch completed. Its transcript evidence joins the visual branch before editorial planning; span timing shows whether the other branch is still running.",
     vision:
       "The visual-analysis branch completed. The workflow joins both analysis results before choosing the edit plan, preserving shared source lineage.",
-    clips: `The shared edit plan produced ${job.languages} locale branches. This replay follows ${job.locale?.toUpperCase() || "the source"}; sibling locales are separate traces. Catalog indexing is dispatched independently and is not recorded in this delivery trace.`,
-    translate: `The ${job.locale?.toUpperCase()} branch completed translation and timing. Only the extracted ${job.minutes?.toFixed(1)} output minutes continue to voice synthesis.`,
+    clips: `${job.plan === "full" ? "The full program was retained" : "Selected source intervals were grouped into a highlight plan"}. The localization plan produced ${job.languages} language branches. This replay follows ${job.locale?.toUpperCase() || "the source"}; sibling locales are separate traces. Catalog indexing is dispatched independently and is not recorded in this delivery trace.`,
+    translate: `The ${job.locale?.toUpperCase()} branch completed translation and timing. The ${job.minutes?.toFixed(1)} ${job.plan === "full" ? "full-program" : "selected highlight"} output minutes continue to voice synthesis.`,
     tts: laterAttempt
       ? `Speech attempt ${span.attempt} failed. The package returned to the speech queue for a bounded retry; the next attempt's wait includes backoff and queueing.`
       : job.status === "retry budget exhausted"
         ? `Speech attempt ${span.attempt} exhausted the retry budget. The package was quarantined without entering quality evaluation or publication.`
-        : `Speech attempt ${span.attempt} completed using ${span.model || job.model || "the recorded"} profile${(span.fallback ?? job.fallback) ? " through the fallback provider" : ""}. The resulting audio proceeds to quality evaluation.`,
+        : `Speech attempt ${span.attempt} completed using ${span.model || job.model || "the recorded"} profile${(span.fallback ?? job.fallback) ? " through the fallback provider" : ""}. The generated speech proceeds to timing alignment and audio mixing before quality evaluation.`,
+    mix: "The translated speech was placed on the program timeline and the modeled audio-mixing stage completed. In production, this step requires segment timestamps and clean music-and-effects stems; excessive timing changes must trigger adaptation instead of blindly stretching speech. The simulator records timing and cost, not a rendered soundtrack.",
     qc: `The synthetic quality score was ${job.score?.toFixed(1) ?? "unrecorded"}${job.qualityThreshold != null ? ` against a threshold of ${job.qualityThreshold}` : ""}. ${has("review") ? "This package was routed to editorial review instead of direct publication." : "This package took the automated publication path."} This score is illustrative, not a measured media-quality result.`,
     review:
       job.status === "editorial rejection"

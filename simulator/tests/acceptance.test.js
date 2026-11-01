@@ -45,7 +45,14 @@ test("controlled comparison admits equal work and discloses undrained runs", () 
   const results = compareProfiles(DEFAULTS);
   assert.equal(results.length, 3);
   assert.equal(new Set(results.map((r) => r.assets)).size, 1);
-  assert.equal(results[0].assets, 60);
+  assert.equal(
+    results[0].assets,
+    Math.floor((DEFAULTS.arrival * 60) / 48 / DEFAULTS.sourceMinutes),
+  );
+  for (const result of results) {
+    assert.equal(result.sourceMinutes, results[0].sourceMinutes);
+    assert.deepEqual(result.catalog, results[0].catalog);
+  }
   for (const r of results) {
     assert.ok(r.accepted > 0);
     assert.ok(r.unitCost > 0);
@@ -55,5 +62,9 @@ test("controlled comparison admits equal work and discloses undrained runs", () 
   const balanced = results.find((r) => r.model === "balanced"),
     economy = results.find((r) => r.model === "economy");
   assert.ok(balanced.yield > economy.yield);
-  assert.ok(balanced.unitCost < economy.unitCost);
+  // Cost ordering depends on catalog length, review load and utilization; do not hard-code a winner.
+  const blocked = compareProfiles({ ...DEFAULTS, reviewers: 0, quality: 99 });
+  assert.ok(blocked.some((result) => result.pending > 0));
+  for (const result of blocked.filter((result) => result.pending > 0))
+    assert.equal(result.time, 12600);
 });

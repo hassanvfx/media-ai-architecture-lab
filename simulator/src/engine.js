@@ -1,12 +1,22 @@
 import { DEFAULTS, STAGES, PROFILES } from "./catalog.js";
+import {
+  CATALOG_MIXES,
+  DESTINATIONS,
+  durationSummary,
+  sampleSourceMinutes,
+  selectedShare,
+  stageName,
+} from "./workload.js";
 
 export const clamp = (x, min, max) => Math.min(max, Math.max(min, x));
 export function normalizeConfig(input = {}) {
   const c = { ...DEFAULTS, ...input };
   for (const [key, min, max] of [
     ["arrival", 0, 4800],
-    ["languages", 1, 12],
-    ["sourceMinutes", 1, 30],
+    ["languages", 1, 11],
+    ["sourceMinutes", 0.1, 180],
+    ["minSourceMinutes", 0.1, 180],
+    ["maxSourceMinutes", 0.1, 180],
     ["clipRatio", 5, 100],
     ["gpu", 1, 24],
     ["cpu", 1, 24],
@@ -27,6 +37,24 @@ export function normalizeConfig(input = {}) {
   for (const key of ["autoscale", "fallback", "outage", "revoked"])
     c[key] = c[key] === true;
   if (!PROFILES[c.model]) c.model = "balanced";
+  // Accept older fixed-duration exports, but keep the new catalog model explicit.
+  c.durationMode =
+    input.durationMode === "fixed" ||
+    (!input.durationMode && Object.hasOwn(input, "sourceMinutes"))
+      ? "fixed"
+      : "mix";
+  c.catalogMix =
+    input.catalogMix === "custom" || CATALOG_MIXES[input.catalogMix]
+      ? input.catalogMix
+      : DEFAULTS.catalogMix;
+  c.maxSourceMinutes = Math.max(c.minSourceMinutes, c.maxSourceMinutes);
+  c.plan = ["full", "highlights"].includes(input.plan)
+    ? input.plan
+    : Object.hasOwn(input, "clipRatio") && Number(input.clipRatio) < 100
+      ? "highlights"
+      : DEFAULTS.plan;
+  c.sourceMinutes = durationSummary(c).mean;
+  c.modelVersion = 2;
   return c;
 }
 export class Simulation {
@@ -38,6 +66,9 @@ export class Simulation {
     this.config = normalizeConfig(config);
     this.time = 0;
     this.rng = this.config.seed;
+    this.workloadRng = this.config.seed;
+    this.receivedSourceMinutes = 0;
+    this.recentSources = [];
     this.arrivalCredit = 0;
     this.serial = 0;
     this.events = [];
@@ -47,6 +78,8 @@ export class Simulation {
     this.history = [];
     this.joins = new Map();
     this.assetCount = 0;
+    this.offeredAssets = 0;
+    this.offeredSourceMinutes = 0;
     this.indexed = 0;
     this.accepted = 0;
     this.outputs = 0;
@@ -77,6 +110,11 @@ export class Simulation {
   rand() {
     this.rng = (Math.imul(1664525, this.rng) + 1013904223) >>> 0;
     return this.rng / 4294967296;
+  }
+  workloadRandom() {
+    this.workloadRng =
+      (Math.imul(1664525, this.workloadRng) + 1013904223) >>> 0;
+    return this.workloadRng / 4294967296;
   }
   event(stage, message, level = "info", job = null) {
     this.events.unshift({
@@ -118,6 +156,7 @@ export class Simulation {
       index: 6,
       translate: 8,
       tts: c.outage && !c.fallback ? 0 : this.scaledGpu,
+      mix: c.cpu,
       qc: c.cpu,
       review: c.reviewers,
       publish: 6,
@@ -258,32 +297,20 @@ export class Simulation {
           ...j,
           id: `${j.asset}-${lang}`,
           output: true,
-          locale: [
-            "en",
-            "es",
-            "fr",
-            "de",
-            "pt",
-            "ja",
-            "ko",
-            "it",
-            "ar",
-            "hi",
-            "nl",
-            "zh",
-          ][lang],
-          minutes: (j.sourceMinutes * j.clipRatio) / 100,
+          locale: DESTINATIONS[lang][0],
+          minutes: j.sourceMinutes * selectedShare(j),
           path: [...j.path],
         });
       this.event(
         id,
-        `${j.asset} · edit plan committed → ${j.languages} locales`,
+        `${j.asset} · ${j.plan === "full" ? "Full program" : "Highlight plan"} ready → ${j.languages} destination languages`,
         "info",
         j,
       );
     } else if (id === "index") this.indexed++;
     else if (id === "translate") this.next("tts", j);
-    else if (id === "tts") this.next("qc", j);
+    else if (id === "tts") this.next("mix", j);
+    else if (id === "mix") this.next("qc", j);
     else if (id === "qc") {
       this.qaTotal++;
       j.qualityThreshold = c.quality;
@@ -364,21 +391,34 @@ export class Simulation {
     this.arrivalCredit += (c.arrival * 60) / 86400 / c.sourceMinutes;
     while (this.arrivalCredit >= 1 - 1e-9) {
       this.arrivalCredit = Math.max(0, this.arrivalCredit - 1);
+      const sourceMinutes = sampleSourceMinutes(c, () => this.workloadRandom());
+      const restricted = this.workloadRandom() < 0.2;
+      const asset = "HU-" + String(++this.serial).padStart(5, "0");
+      this.offeredAssets++;
+      this.offeredSourceMinutes += sourceMinutes;
       if (pending > 3000 || this.stages.ingest.queue.length > 100) {
         this.deferred++;
         continue;
       }
-      const asset = "HU-" + String(++this.serial).padStart(5, "0");
       this.assetCount++;
+      this.receivedSourceMinutes += sourceMinutes;
+      this.recentSources.unshift({
+        asset,
+        minutes: sourceMinutes,
+        born: this.time,
+      });
+      this.recentSources = this.recentSources.slice(0, 24);
       this.enqueue("ingest", {
         id: asset,
         asset,
         born: this.time,
-        sourceMinutes: c.sourceMinutes,
+        sourceMinutes,
+        sourceLanguage: "en",
+        plan: c.plan,
         languages: c.languages,
         clipRatio: c.clipRatio,
         slo: c.slo,
-        restricted: this.rand() < 0.2,
+        restricted,
         path: [],
         minutes: 0,
         output: false,
@@ -422,7 +462,7 @@ export class Simulation {
     // Compute and staffed review capacity are billed while provisioned, including idle time.
     this.charge(
       "compute",
-      ((this.scaledGpu + 4) * 2.4 + c.cpu * 2 * 0.12) / 3600,
+      ((this.scaledGpu + 4) * 2.4 + c.cpu * 3 * 0.12) / 3600,
     );
     this.charge("review", (c.reviewers * 30) / 3600);
     for (const n of STAGES) {
@@ -535,6 +575,8 @@ export class Simulation {
       history: [...this.history],
       events: [...this.events],
       completed: [...this.completed],
+      receivedSourceMinutes: this.receivedSourceMinutes,
+      recentSources: [...this.recentSources],
     };
   }
 }
@@ -546,7 +588,7 @@ export function capacityPlan(config, speechSlots = config.gpu) {
     profile = PROFILES[c.model];
   const jobs = (c.arrival * 60) / 24 / c.sourceMinutes,
     outputJobs = jobs * c.languages;
-  const outputMinutes = (c.sourceMinutes * c.clipRatio) / 100;
+  const outputMinutes = c.sourceMinutes * selectedShare(c);
   const mean = c.outage && c.fallback ? 90 : profile.mean;
   const x = (c.quality - mean) / 14 + 1.5;
   const cdf = clamp(
@@ -565,6 +607,7 @@ export function capacityPlan(config, speechSlots = config.gpu) {
     index: jobs,
     translate: outputJobs,
     tts: outputJobs,
+    mix: outputJobs,
     qc: outputJobs,
     review: outputJobs * cdf,
     publish: outputJobs * (acceptance + cdf * 0.82),
@@ -579,14 +622,20 @@ export function capacityPlan(config, speechSlots = config.gpu) {
     index: 6,
     translate: 8,
     tts: c.outage && !c.fallback ? 0 : speechSlots,
+    mix: c.cpu,
     qc: c.cpu,
     review: c.reviewers,
     publish: 6,
   };
   return STAGES.map((n) => {
-    const localized = ["translate", "tts", "qc", "review", "publish"].includes(
-      n.id,
-    );
+    const localized = [
+      "translate",
+      "tts",
+      "mix",
+      "qc",
+      "review",
+      "publish",
+    ].includes(n.id);
     let duration =
       n.fixed + (localized ? outputMinutes : c.sourceMinutes) * 60 * n.rtf;
     if (n.id === "tts")
@@ -595,7 +644,7 @@ export function capacityPlan(config, speechSlots = config.gpu) {
     const slots = capacities[n.id];
     return {
       id: n.id,
-      name: n.name,
+      name: stageName(n, c),
       kind: n.kind,
       taskRate: rates[n.id],
       serviceSeconds: duration,
@@ -630,6 +679,11 @@ export function compareProfiles(config) {
       time: s.time,
       accepted: s.accepted,
       assets: s.assetCount,
+      offeredAssets: s.offeredAssets,
+      offeredSourceMinutes: s.offeredSourceMinutes,
+      deferred: s.deferred,
+      sourceMinutes: s.receivedSourceMinutes,
+      catalog: [...s.recentSources],
       cost: s.cost,
       yield: metrics.yield,
       p95: metrics.p95,

@@ -10,6 +10,8 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { STAGES, CONNECTIONS } from "../catalog.js";
+import { HelpLabel, Terms } from "./Help.jsx";
+import { stageInfo } from "../workload.js";
 import { Icon } from "./ui.jsx";
 function StageNode({ data, selected }) {
   const { stage: n, stats: s, lens, blocked, replay } = data;
@@ -40,14 +42,18 @@ function StageNode({ data, selected }) {
           <Icon name={n.icon} size={16} />
         </span>
         <span className="node-kind">
-          {n.kind === "human" ? "HUMAN" : n.kind.toUpperCase()}
+          <Terms>{n.kind === "human" ? "HUMAN" : n.kind.toUpperCase()}</Terms>
         </span>
         <span
           className={`status-dot ${blocked ? "red" : s.active ? "green" : ""}`}
         />
       </div>
-      <strong>{n.name}</strong>
-      <span className="node-tool">{n.tool}</span>
+      <strong>
+        <HelpLabel label={n.name} details={n.purpose} />
+      </strong>
+      <span className="node-tool">
+        <Terms>{n.tool}</Terms>
+      </span>
       <div className="node-stat">
         <span>{replay || (blocked ? "Circuit open" : value)}</span>
         <span>
@@ -96,11 +102,11 @@ export default function Graph({
       STAGES.map((n) => ({
         id: n.id,
         type: "stage",
-        ariaLabel: n.name,
+        ariaLabel: stageInfo(n, replay?.config || snap.config).name,
         position: { x: n.x, y: n.y },
         selected: selected === n.id,
         data: {
-          stage: n,
+          stage: stageInfo(n, replay?.config || snap.config),
           stats: replay
             ? { queue: 0, active: 0, capacity: 0, utilization: 0, finished: 0 }
             : snap.stages[n.id],

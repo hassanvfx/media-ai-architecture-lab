@@ -2,7 +2,7 @@
 
 ## 0:00–1:00 — Establish the contract
 
-Open System architecture. Explain that this is an executable reference model, with declared assumptions. State source hours/day, extracted fraction, target locales and delivery deadline. Show the current scenario and decision brief. Ask the reviewer which constraint they would change first.
+Start with “What are we doing?” and choose the output plan. Walk through the 30-minute source-to-output example; explain that languages multiply output work and that incoming source lengths are sampled from a catalog mix. Open the process-phase disclosures, then continue to System architecture. Explain that this is an executable reference model, with declared assumptions. State source hours/day, extracted fraction, target locales and delivery deadline. Show the current scenario and decision brief. Ask the reviewer which constraint they would change first.
 
 ## 1:00–2:15 — Trace one asset
 

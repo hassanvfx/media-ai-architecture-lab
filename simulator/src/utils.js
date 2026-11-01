@@ -17,7 +17,8 @@ export function readInitial() {
         JSON.parse(decodeURIComponent(atob(hash.slice(4)))),
       );
     const saved = localStorage.getItem("hassan-uriostegui-observatory-config");
-    return saved ? normalizeConfig(JSON.parse(saved)) : DEFAULTS;
+    const parsed = saved ? JSON.parse(saved) : null;
+    return parsed?.modelVersion === 2 ? normalizeConfig(parsed) : DEFAULTS;
   } catch {
     return DEFAULTS;
   }

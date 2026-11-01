@@ -20,6 +20,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { HelpLabel } from "./Help.jsx";
 import { $, timeLabel } from "../utils.js";
 const ICONS = {
   upload: Upload,
@@ -57,7 +58,7 @@ export function Slider({
   return (
     <label className="slider-field">
       <span>
-        {label}
+        <HelpLabel label={label} />
         <strong>
           {$(value, value % 1 ? 1 : 0)}
           <small>{suffix}</small>
@@ -78,20 +79,22 @@ export function Slider({
 }
 export function Toggle({ label, hint, value, onChange }) {
   return (
-    <button
-      className="toggle-row"
-      role="switch"
-      aria-checked={value}
-      onClick={() => onChange(!value)}
-    >
+    <div className="toggle-row">
       <span>
-        {label}
+        <HelpLabel label={label} />
         {hint && <small>{hint}</small>}
       </span>
-      <span className={`switch ${value ? "on" : ""}`}>
+      <button
+        type="button"
+        aria-label={label}
+        className={`switch ${value ? "on" : ""}`}
+        role="switch"
+        aria-checked={value}
+        onClick={() => onChange(!value)}
+      >
         <i />
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
 export function Sparkline({ values, color = "#4e997b", fill = false }) {
@@ -128,7 +131,7 @@ export function Metric({ label, value, unit, note, values, accent, delta }) {
   return (
     <div className={"metric " + (accent || "")}>
       <div className="metric-heading">
-        {label}
+        <HelpLabel label={label} />
         <span className="metric-dot" />
       </div>
       <div className="metric-value">

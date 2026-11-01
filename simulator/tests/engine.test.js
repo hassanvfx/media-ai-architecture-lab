@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { DEFAULTS } from "../src/catalog.js";
 import { Simulation, normalizeConfig } from "../src/engine.js";
 
 // Exercise outcome contracts, rather than implementation-specific snapshots.
@@ -36,8 +37,9 @@ test("10x catalog volume creates more pending work than the baseline", () => {
   assert.ok(spike.stages.prepare.queue.length > 0);
 });
 test("a stricter gate with an economy model increases review pressure", () => {
-  const a = new Simulation({}, 1800),
-    b = new Simulation({ model: "economy", quality: 90 }, 1800);
+  const workload = { arrival: 240, sourceMinutes: 5, clipRatio: 20 };
+  const a = new Simulation(workload, 1800),
+    b = new Simulation({ ...workload, model: "economy", quality: 90 }, 1800);
   assert.ok(b.metrics().yield < a.metrics().yield);
   assert.ok(b.stages.review.queue.length > a.stages.review.queue.length);
   assert.ok(b.metrics().unitCost > a.metrics().unitCost);
@@ -133,8 +135,8 @@ test("imported config is bounded and unknown model profiles fall back", () => {
     quality: 300,
     outage: "false",
   });
-  assert.equal(c.arrival, 240);
-  assert.equal(c.languages, 12);
+  assert.equal(c.arrival, DEFAULTS.arrival);
+  assert.equal(c.languages, 11);
   assert.equal(c.gpu, 1);
   assert.equal(c.model, "balanced");
   assert.equal(c.reviewers, 2);

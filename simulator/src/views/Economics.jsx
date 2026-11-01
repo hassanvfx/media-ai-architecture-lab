@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { ArrowDown, GitBranch, Wallet } from "lucide-react";
 import { $, timeLabel } from "../utils.js";
 
+import { HelpLabel, Terms } from "../components/Help.jsx";
 import { compareProfiles } from "../engine.js";
 import { Chart } from "../components/ui.jsx";
 export default function Economics({ snap, baseline }) {
@@ -14,7 +15,11 @@ export default function Economics({ snap, baseline }) {
         <div>
           <span className="eyebrow">COST / QUALITY TRADEOFF</span>
           <h2>Unit economics & model strategy</h2>
-          <p>Retries, idle capacity and human review stay in the numerator.</p>
+          <p>
+            <Terms>
+              {"Retries, idle capacity and human review stay in the numerator."}
+            </Terms>
+          </p>
         </div>
         <Wallet size={32} />
       </div>
@@ -22,9 +27,11 @@ export default function Economics({ snap, baseline }) {
         <div>
           <h3>Compare three model strategies on the same workload</h3>
           <p>
-            Admit 30 minutes of current demand, then drain each pipeline for up
-            to 3 additional hours. Primary providers healthy; rights revocation
-            off. Same seed and input dimensions.
+            <Terms>
+              {
+                "Admit 30 minutes of current demand, then drain each pipeline for up to 3 additional hours. Primary providers healthy; rights revocation off. Identical offered source sequence and destination languages, using a separate catalog seed. Admissions can differ under overload; compare the admitted work and deferred counts. Execution randomness varies with the model path."
+              }
+            </Terms>
           </p>
         </div>
         <button
@@ -45,19 +52,37 @@ export default function Economics({ snap, baseline }) {
                 <small>/ accepted min</small>
               </strong>
               <div>
-                <span>Accepted output</span>
+                <span>Admitted source workload</span>
+                <b>
+                  {r.assets} videos · {$(r.sourceMinutes, 1)} min
+                </b>
+              </div>
+              <div>
+                <span>
+                  <HelpLabel label="Accepted output" />
+                </span>
                 <b>{$(r.accepted, 1)} min</b>
               </div>
               <div>
-                <span>First-pass yield</span>
+                <span>
+                  <HelpLabel label="First-pass yield" />
+                </span>
                 <b>{$(r.yield, 1)}%</b>
               </div>
               <div>
-                <span>Batch makespan</span>
+                <span>
+                  <HelpLabel label="Batch makespan" />
+                </span>
                 <b>{$(r.time / 60, 1)} min</b>
               </div>
               <div>
-                <span>Unfinished tasks</span>
+                <span>Deferred inputs</span>
+                <b>{r.deferred}</b>
+              </div>
+              <div>
+                <span>
+                  <HelpLabel label="Unfinished tasks" />
+                </span>
                 <b>{r.pending}</b>
               </div>
               <p>
@@ -93,20 +118,26 @@ export default function Economics({ snap, baseline }) {
                 }}
               />
               <span>
-                {k === "inference"
-                  ? "Variable processing"
-                  : k === "compute"
-                    ? "Provisioned compute"
-                    : k === "review"
-                      ? "Staffed human review"
-                      : "Packaging & delivery"}
+                <HelpLabel
+                  label={
+                    k === "inference"
+                      ? "Variable processing"
+                      : k === "compute"
+                        ? "Provisioned compute"
+                        : k === "review"
+                          ? "Staffed human review"
+                          : "Packaging & delivery"
+                  }
+                />
               </span>
               <strong>${$(v, 2)}</strong>
               <small>{$((v / Math.max(snap.cost, 0.001)) * 100)}%</small>
             </div>
           ))}
           <div className="formula">
-            <span>All modeled spend</span>
+            <span>
+              <HelpLabel label="All modeled spend" />
+            </span>
             <ArrowDown size={13} />
             <strong>Accepted output minutes</strong>
             <b>= {m.unitCost == null ? "—" : `$${$(m.unitCost, 3)}`}/min</b>
@@ -115,38 +146,55 @@ export default function Economics({ snap, baseline }) {
         <div className="analysis-card">
           <h3>Capacity and quality</h3>
           <div className="fact-row">
-            <span>Admitted source assets</span>
+            <span>
+              <HelpLabel label="Admitted source assets" />
+            </span>
             <b>{snap.assetCount}</b>
           </div>
           <div className="fact-row">
-            <span>Delivered derivatives</span>
+            <span>
+              <HelpLabel label="Delivered derivatives" />
+            </span>
             <b>{snap.outputs}</b>
           </div>
           <div className="fact-row">
-            <span>First-pass gate yield</span>
+            <span>
+              <HelpLabel label="First-pass gate yield" />
+            </span>
             <b>{$(m.yield, 1)}%</b>
           </div>
           <div className="fact-row">
-            <span>Analysis cache hits</span>
+            <span>
+              <HelpLabel label="Analysis cache hits" />
+            </span>
             <b>{snap.cacheHits}</b>
           </div>
           <div className="fact-row">
-            <span>Transient retries</span>
+            <span>
+              <HelpLabel label="Transient retries" />
+            </span>
             <b>{snap.retries}</b>
           </div>
           <div className="fact-row">
-            <span>Quarantined derivatives</span>
+            <span>
+              <HelpLabel label="Quarantined derivatives" />
+            </span>
             <b>{snap.quarantined}</b>
           </div>
           <div className="fact-row">
-            <span>Rights holds / deferred admissions</span>
+            <span>
+              <HelpLabel label="Rights holds / deferred admissions" />
+            </span>
             <b>
               {snap.denied} / {snap.deferred}
             </b>
           </div>
           <p className="subtle-note">
-            Unit cost during warm-up includes work in progress. Compare
-            equal-duration, drained runs for a fair model bake-off.
+            <Terms>
+              {
+                "Unit cost during warm-up includes work in progress. Compare equal-duration, drained runs for a fair model bake-off."
+              }
+            </Terms>
           </p>
         </div>
         <div className="analysis-card wide">
@@ -161,7 +209,11 @@ export default function Economics({ snap, baseline }) {
       {baseline && (
         <div className="baseline-comparison">
           <h3>Saved checkpoint vs. current run</h3>
-          <p>A point-in-time comparison, not a controlled A/B experiment.</p>
+          <p>
+            <Terms>
+              {"A point-in-time comparison, not a controlled A/B experiment."}
+            </Terms>
+          </p>
           <table>
             <thead>
               <tr>

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { ArrowLeft, ArrowRight, Pause, Play, RotateCcw } from "lucide-react";
+import { HelpLabel, Terms } from "./Help.jsx";
+import { DESTINATIONS } from "../workload.js";
 import Graph from "./Graph.jsx";
 import { traceSteps, traceState, traceCommentary } from "../traceReplay.js";
 import { timeLabel } from "../utils.js";
@@ -36,8 +38,10 @@ export default function TraceReplay({ job, snap }) {
             {job.asset} <small>/ {job.locale?.toUpperCase() || "SOURCE"}</small>
           </h3>
           <p>
-            {job.sourceMinutes}m source · {job.languages} locale branches ·
-            Final outcome: <b>{job.status}</b>
+            {job.sourceMinutes.toFixed(1)}m English source ·{" "}
+            {job.plan === "full" ? "Full-program dubbing" : "Dubbed highlights"}{" "}
+            · {job.languages} language branches · Final outcome:{" "}
+            <b>{job.status}</b>
           </p>
         </div>
         <span className="tag">{job.model || "Shared source work"}</span>
@@ -104,7 +108,7 @@ export default function TraceReplay({ job, snap }) {
         <span>
           <i /> Selected step
         </span>
-        <span>Click a recorded node to jump</span>
+        <span>Select a node to read its explanation below</span>
         <span>Muted nodes are outside this output trace</span>
       </div>
       <div className="replay-commentary" aria-live="polite" aria-atomic="true">
@@ -117,7 +121,9 @@ export default function TraceReplay({ job, snap }) {
             {timeLabel(span.start)} → {timeLabel(span.end)}
           </span>
           <h3>{note.stage?.name}</h3>
-          <p>{note.text}</p>
+          <p>
+            <Terms>{note.text}</Terms>
+          </p>
           <div className="replay-facts">
             <span>
               <b>{note.duration}s</b> processing
@@ -126,7 +132,9 @@ export default function TraceReplay({ job, snap }) {
               <b>{note.wait == null ? "Unrecorded" : `${note.wait}s`}</b> queue
               / backoff
             </span>
-            <span>{note.stage?.tool}</span>
+            <span>
+              <Terms>{note.stage?.tool}</Terms>
+            </span>
           </div>
         </div>
       </div>

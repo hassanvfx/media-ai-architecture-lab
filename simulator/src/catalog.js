@@ -1,15 +1,21 @@
 export const DEFAULTS = {
-  arrival: 240,
+  arrival: 48,
   languages: 3,
-  sourceMinutes: 5,
-  clipRatio: 20,
+  sourceMinutes: 9,
+  modelVersion: 2,
+  durationMode: "mix",
+  catalogMix: "mixed",
+  minSourceMinutes: 1,
+  maxSourceMinutes: 60,
+  plan: "full",
+  clipRatio: 100,
   gpu: 4,
   cpu: 6,
   reviewers: 2,
   cache: 25,
   quality: 85,
   retries: 2,
-  slo: 10,
+  slo: 30,
   model: "balanced",
   autoscale: false,
   fallback: true,
@@ -43,7 +49,7 @@ export const PROFILES = {
 export const STAGES = [
   {
     id: "ingest",
-    name: "Catalog ingest",
+    name: "Receive source videos",
     short: "Ingest",
     icon: "upload",
     kind: "io",
@@ -78,7 +84,7 @@ export const STAGES = [
   },
   {
     id: "policy",
-    name: "Rights & admission",
+    name: "Check rights & consent",
     short: "Rights",
     icon: "shield",
     kind: "control",
@@ -113,7 +119,7 @@ export const STAGES = [
   },
   {
     id: "prepare",
-    name: "Probe & normalize",
+    name: "Inspect & normalize media",
     short: "Prepare",
     icon: "film",
     kind: "cpu",
@@ -148,7 +154,7 @@ export const STAGES = [
   },
   {
     id: "asr",
-    name: "Speech intelligence",
+    name: "Transcribe speech & speakers",
     short: "Speech",
     icon: "audio",
     kind: "gpu",
@@ -183,7 +189,7 @@ export const STAGES = [
   },
   {
     id: "vision",
-    name: "Visual understanding",
+    name: "Analyze scenes & visuals",
     short: "Vision",
     icon: "scan",
     kind: "gpu",
@@ -218,7 +224,7 @@ export const STAGES = [
   },
   {
     id: "clips",
-    name: "Editorial planning",
+    name: "Prepare localization plan",
     short: "Editorial",
     icon: "spark",
     kind: "api",
@@ -253,7 +259,7 @@ export const STAGES = [
   },
   {
     id: "index",
-    name: "Discoverable catalog",
+    name: "Update searchable catalog",
     short: "Index",
     icon: "search",
     kind: "io",
@@ -283,7 +289,7 @@ export const STAGES = [
   },
   {
     id: "translate",
-    name: "Translation & timing",
+    name: "Translate & fit dialogue",
     short: "Translate",
     icon: "languages",
     kind: "api",
@@ -294,7 +300,7 @@ export const STAGES = [
     fixed: 5,
     cost: 0.022,
     purpose:
-      "Translate selected intervals with brand terminology, protected names and timing constraints. Every locale receives an independent durable job.",
+      "Translate the planned full program or selected intervals with brand terminology, protected names and timing constraints. Every locale receives an independent durable job.",
     stack: [
       [
         "DeepL API",
@@ -307,7 +313,7 @@ export const STAGES = [
         "https://docs.temporal.io/activities",
       ],
     ],
-    input: "EDL · locale · glossary_version · speaker_turns",
+    input: "localization_plan · locale · glossary_version · speaker_turns",
     output: "translated_segments · timing_budget · pronunciation",
     decision:
       "Keep a provider-neutral contract. Compare candidate models on the same multilingual corpus; embedding similarity alone does not prove semantic fidelity.",
@@ -318,7 +324,7 @@ export const STAGES = [
   },
   {
     id: "tts",
-    name: "Voice synthesis",
+    name: "Generate translated speech",
     short: "Synthesis",
     icon: "wave",
     kind: "gpu",
@@ -352,13 +358,44 @@ export const STAGES = [
     code: "if circuit.open:\n  provider = approved_fallback\nresult = provider.synthesize(request, idempotency_key)\n# On ambiguous timeout: reconcile provider request_id.\ncheckpoint(audio_hash, provider, request_id, billed_cost)",
   },
   {
+    id: "mix",
+    name: "Align dialogue & mix audio",
+    short: "Audio mix",
+    icon: "audio",
+    kind: "cpu",
+    tool: "FFmpeg · timing & audio mix",
+    x: 470,
+    y: 385,
+    rtf: 0.08,
+    fixed: 4,
+    cost: 0.01,
+    purpose:
+      "Place translated speech on the source timeline, apply bounded timing adjustments, and mix it with supplied music-and-effects stems. Produce a candidate audio/video package for quality checks.",
+    stack: [
+      [
+        "FFmpeg audio filters",
+        "Timeline offsets, tempo adjustment, audio mixing and loudness normalization",
+        "https://www.ffmpeg.org/ffmpeg-filters.html",
+      ],
+    ],
+    input:
+      "translated_audio · segment_timestamps · timing_targets · music_effects_stems · source_video",
+    output: "mixed_audio · candidate_video · timed_text · sync_report",
+    decision:
+      "Use segment timestamps to preserve timing. Regenerate or rewrite dialogue when adaptation exceeds safe bounds; do not force arbitrarily large tempo changes. Require clean music-and-effects stems or an explicit separation workflow instead of mixing translated speech over the original dialogue.",
+    failure:
+      "Missing stems, bad segment boundaries, clipping or excessive timing drift block release. The simulation models one linear-cost worker stage; it does not synthesize, align, mix or render actual media.",
+    metric: "Timing drift · loudness · clipping · candidate completeness",
+    code: "validate(segment_timestamps, timing_targets)\nassert music_effects_stems.available\n# FFmpeg: adelay / atrim, bounded atempo, amix, loudnorm\ncandidate = assemble_localized_timeline(voice, stems, source_video)\ncheckpoint(candidate, sync_report)",
+  },
+  {
     id: "qc",
-    name: "Quality gates",
+    name: "Check audio & video quality",
     short: "Quality",
     icon: "check",
     kind: "cpu",
     tool: "FFmpeg checks · calibrated evals",
-    x: 470,
+    x: 235,
     y: 385,
     rtf: 0.09,
     fixed: 5,
@@ -377,7 +414,8 @@ export const STAGES = [
         "https://mlflow.org/docs/latest/ml/evaluation/",
       ],
     ],
-    input: "dub · EDL · source_evidence · eval_suite_version",
+    input:
+      "candidate_video · mixed_audio · localization_plan · source_evidence · eval_suite_version",
     output: "gate_scores · verdict · review_reason · lineage",
     decision:
       "A stricter threshold may improve acceptance confidence while increasing reviewer backlog. Track failure slices, not just aggregate scores.",
@@ -388,12 +426,12 @@ export const STAGES = [
   },
   {
     id: "review",
-    name: "Editorial review",
+    name: "Human quality review",
     short: "Review",
     icon: "users",
     kind: "human",
     tool: "Human approval · audit trail",
-    x: 470,
+    x: 235,
     y: 610,
     rtf: 0,
     fixed: 180,
@@ -418,12 +456,12 @@ export const STAGES = [
   },
   {
     id: "publish",
-    name: "Package & deliver",
+    name: "Package localized outputs",
     short: "Deliver",
     icon: "send",
     kind: "io",
     tool: "FFmpeg · S3 / CloudFront",
-    x: 235,
+    x: 0,
     y: 385,
     rtf: 0.1,
     fixed: 4,
@@ -462,7 +500,8 @@ export const CONNECTIONS = [
   ["clips", "index"],
   ["clips", "translate"],
   ["translate", "tts"],
-  ["tts", "qc"],
+  ["tts", "mix"],
+  ["mix", "qc"],
   ["qc", "publish"],
   ["qc", "review"],
   ["review", "publish"],
@@ -485,7 +524,7 @@ export const SCENARIOS = [
     icon: "trending",
     description:
       "An enterprise catalog import pushes arrival rate to 10×. Find the first constraint.",
-    patch: { arrival: 2400 },
+    patch: { arrival: 480 },
     talk: "Inspect pending source minutes, then grow the measured bottleneck. Autoscaling has a warm-up delay and a ceiling; upstream admission remains bounded.",
   },
   {

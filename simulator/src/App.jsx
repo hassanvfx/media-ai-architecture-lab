@@ -42,6 +42,19 @@ import {
   Chart,
   Modal,
 } from "./components/ui.jsx";
+import {
+  HelpLabel,
+  Terms,
+  GlossaryButton,
+  explanation,
+} from "./components/Help.jsx";
+import ProcessOverview from "./components/ProcessOverview.jsx";
+import {
+  CATALOG_MIXES,
+  DESTINATIONS,
+  durationSummary,
+  selectedShare,
+} from "./workload.js";
 import Graph from "./components/Graph.jsx";
 import Inspector from "./components/Inspector.jsx";
 import Economics from "./views/Economics.jsx";
@@ -52,7 +65,7 @@ import Blueprint from "./views/Blueprint.jsx";
 export default function App() {
   const [initial] = useState(readInitial);
   const engine = useRef(null);
-  if (!engine.current) engine.current = new Simulation(initial, 900);
+  if (!engine.current) engine.current = new Simulation(initial, 1800);
   const [snap, setSnap] = useState(() => engine.current.snapshot());
   const [running, setRunning] = useState(true);
   const [speed, setSpeed] = useState(30);
@@ -266,50 +279,135 @@ export default function App() {
                   <Layers3 size={13} /> INPUT & FAN-OUT
                 </div>
                 <Slider
-                  label="Source catalog"
+                  label="Source hours received"
                   value={snap.config.arrival}
                   min={0}
                   max={4800}
-                  step={60}
+                  step={12}
                   suffix="h/day"
                   onChange={(v) => configure({ arrival: v })}
                 />
-                <Slider
-                  label="Source duration"
-                  value={snap.config.sourceMinutes}
-                  min={1}
-                  max={30}
-                  suffix="min"
-                  onChange={(v) => configure({ sourceMinutes: v })}
-                />
+                <label className="select-label">
+                  <HelpLabel label="Source catalog mix" />
+                  <select
+                    aria-label="Source catalog mix"
+                    value={
+                      snap.config.durationMode === "fixed"
+                        ? "fixed"
+                        : snap.config.catalogMix
+                    }
+                    onChange={(event) =>
+                      configure({
+                        durationMode: "mix",
+                        catalogMix: event.target.value,
+                      })
+                    }
+                  >
+                    {Object.entries(CATALOG_MIXES).map(([id, mix]) => (
+                      <option key={id} value={id}>
+                        {mix.name}
+                      </option>
+                    ))}
+                    <option value="custom">Custom duration range</option>
+                    {snap.config.durationMode === "fixed" && (
+                      <option value="fixed">
+                        Fixed-size test input (imported)
+                      </option>
+                    )}
+                  </select>
+                </label>
+                <p className="control-footnote">
+                  {durationSummary(snap.config).min.toFixed(1)}–
+                  {durationSummary(snap.config).max.toFixed(0)} min per video.
+                  The model samples a different duration for each arrival; the
+                  mean is used only for planning.
+                </p>
+                {snap.config.catalogMix === "custom" && (
+                  <>
+                    <Slider
+                      label="Shortest source video"
+                      value={snap.config.minSourceMinutes}
+                      min={0.5}
+                      max={180}
+                      step={0.5}
+                      suffix="min"
+                      onChange={(value) =>
+                        configure({ minSourceMinutes: value })
+                      }
+                    />
+                    <Slider
+                      label="Longest source video"
+                      value={snap.config.maxSourceMinutes}
+                      min={snap.config.minSourceMinutes}
+                      max={180}
+                      step={0.5}
+                      suffix="min"
+                      onChange={(value) =>
+                        configure({ maxSourceMinutes: value })
+                      }
+                    />
+                  </>
+                )}
                 <Slider
                   label="Target languages"
                   value={snap.config.languages}
                   min={1}
-                  max={12}
+                  max={11}
+                  hint={
+                    "English source → " +
+                    DESTINATIONS.slice(0, snap.config.languages)
+                      .map(([, name]) => name)
+                      .join(", ")
+                  }
                   onChange={(v) => configure({ languages: v })}
                 />
-                <Slider
-                  label="Clip extraction"
-                  value={snap.config.clipRatio}
-                  min={5}
-                  max={100}
-                  step={5}
-                  suffix="%"
-                  onChange={(v) => configure({ clipRatio: v })}
-                />
+                <label className="select-label">
+                  <HelpLabel label="Localization plan" />
+                  <select
+                    aria-label="Localization plan"
+                    value={snap.config.plan}
+                    onChange={(event) =>
+                      configure({
+                        plan: event.target.value,
+                        clipRatio:
+                          event.target.value === "highlights" &&
+                          snap.config.clipRatio === 100
+                            ? 20
+                            : snap.config.clipRatio,
+                      })
+                    }
+                  >
+                    <option value="full">Dub full programs</option>
+                    <option value="highlights">Create & dub highlights</option>
+                  </select>
+                </label>
+                {snap.config.plan === "highlights" && (
+                  <Slider
+                    label="Selected source share"
+                    value={snap.config.clipRatio}
+                    min={5}
+                    max={100}
+                    step={5}
+                    suffix="%"
+                    hint="Total highlight minutes selected from each source, not a number of clips."
+                    onChange={(value) => configure({ clipRatio: value })}
+                  />
+                )}
                 <div className="derived-box">
-                  <span>Potential output demand</span>
+                  <span>
+                    <HelpLabel label="Potential output demand" />
+                  </span>
                   <strong>
                     {$(
-                      ((((snap.config.arrival * 60) / 24) *
-                        snap.config.clipRatio) /
-                        100) *
+                      ((snap.config.arrival * 60) / 24) *
+                        selectedShare(snap.config) *
                         snap.config.languages,
                     )}
                     <small>min / hour</small>
                   </strong>
-                  <span>Before quality rejection and rights holds</span>
+                  <span>
+                    Minutes across all destination languages, before rejection
+                  </span>
                 </div>
                 <div className="section-label">
                   <Database size={13} /> REUSE
@@ -324,8 +422,11 @@ export default function App() {
                   onChange={(v) => configure({ cache: v })}
                 />
                 <p className="control-footnote">
-                  Cache keys include tenant, content hash, transform and model
-                  versions.
+                  <Terms>
+                    {
+                      "Cache keys include tenant, content hash, transform and model versions."
+                    }
+                  </Terms>
                 </p>
               </>
             ) : controls === "capacity" ? (
@@ -334,14 +435,14 @@ export default function App() {
                   <Gauge size={13} /> RESOURCE POOLS
                 </div>
                 <Slider
-                  label="Speech GPU slots"
+                  label="Voice synthesis workers"
                   value={snap.config.gpu}
                   min={1}
                   max={24}
                   onChange={(v) => configure({ gpu: v })}
                 />
                 <Slider
-                  label="CPU slots per stage"
+                  label="Processing workers"
                   value={snap.config.cpu}
                   min={1}
                   max={24}
@@ -369,7 +470,7 @@ export default function App() {
                   <span>
                     {snap.scaleAt
                       ? `Warming up · ${snap.scaleAt - snap.time}s remaining`
-                      : "ASR and vision each have 2 dedicated slots"}
+                      : "Speech recognition and visual analysis each have 2 dedicated workers"}
                   </span>
                 </div>
                 <div className="section-label">
@@ -401,7 +502,7 @@ export default function App() {
                   <Sparkles size={13} /> MODEL & QUALITY
                 </div>
                 <label className="select-label">
-                  Speech model profile
+                  <HelpLabel label="Speech model profile" />
                   <select
                     aria-label="Speech model profile"
                     value={snap.config.model}
@@ -419,19 +520,19 @@ export default function App() {
                     Variable fee <b>${PROFILES[snap.config.model].cost}/min</b>
                   </span>
                   <span>
-                    Assumed RTF{" "}
+                    <HelpLabel label="RTF" />{" "}
                     <b>{PROFILES[snap.config.model].rtf.toFixed(2)}</b>
                   </span>
                 </div>
                 <Slider
-                  label="Acceptance threshold"
+                  label="Quality threshold"
                   value={snap.config.quality}
                   min={50}
                   max={99}
                   onChange={(v) => configure({ quality: v })}
                 />
                 <Slider
-                  label="Delivery deadline"
+                  label="Delivery target"
                   value={snap.config.slo}
                   min={1}
                   max={60}
@@ -448,8 +549,11 @@ export default function App() {
                   onChange={(v) => configure({ revoked: v })}
                 />
                 <p className="control-footnote">
-                  Rechecked at admission and delivery. Previously delivered
-                  content requires a separate takedown workflow.
+                  <Terms>
+                    {
+                      "Rechecked at admission and delivery. Previously delivered content requires a separate takedown workflow."
+                    }
+                  </Terms>
                 </p>
               </>
             )}
@@ -479,7 +583,7 @@ export default function App() {
               accept=".json,application/json"
               onChange={importConfig}
             />
-            <div className="seed">
+            <div className="seed" title={explanation("Deterministic engine")}>
               <span className="status-dot green" />
               Deterministic engine <span>seed {snap.config.seed}</span>
             </div>
@@ -492,13 +596,17 @@ export default function App() {
                 PLATFORM ENGINEERING <ChevronRight size={10} /> ARCHITECTURE
                 REVIEW
               </div>
-              <h1>Media transformation platform</h1>
+              <h1>From source video to multilingual release</h1>
               <p>
-                Catalog-scale orchestration, capacity planning and model
-                economics.
+                <Terms>
+                  {
+                    "Explore how videos are translated, dubbed, reviewed and delivered\u2014and how workload, quality and capacity affect the result."
+                  }
+                </Terms>
               </p>
             </div>
             <div className="heading-actions">
+              <GlossaryButton />
               <button
                 className="small-outline"
                 onClick={() => setMobileControls(!mobileControls)}
@@ -515,9 +623,20 @@ export default function App() {
               </button>
             </div>
           </div>
+          <ProcessOverview
+            config={snap.config}
+            sources={snap.recentSources}
+            onFollow={() => {
+              setView("traces");
+              document
+                .getElementById("simulation-workspace")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+            onConfigure={configure}
+          />
           <div className="metrics-grid">
             <Metric
-              label="ACCEPTED THROUGHPUT"
+              label="DUBBED OUTPUT DELIVERED"
               value={$(m.throughput)}
               unit="min/h"
               note="Trailing 5 simulated minutes"
@@ -525,7 +644,7 @@ export default function App() {
               delta={delta("throughput", " min/h")}
             />
             <Metric
-              label="OBSERVED P95"
+              label="95% DELIVERY TIME"
               value={$(m.p95, 1)}
               unit="min"
               note="Completed outputs only"
@@ -534,14 +653,14 @@ export default function App() {
               delta={delta("p95", " min", 1)}
             />
             <Metric
-              label="COST / ACCEPTED MIN"
+              label="COST / DELIVERED MIN"
               value={m.unitCost == null ? "—" : "$" + $(m.unitCost, 3)}
-              note="All modeled spend / accepted min"
+              note="Includes idle workers, retries and review"
               values={snap.history.map((h) => h.cost || 0)}
               delta={delta("unitCost", " USD", 3)}
             />
             <Metric
-              label="PENDING WORK"
+              label="WAITING TASKS"
               value={$(m.queue)}
               unit="tasks"
               note={`Oldest wait ${$(m.age, 1)} min`}
@@ -549,7 +668,7 @@ export default function App() {
               accent={m.age > snap.config.slo ? "warning" : ""}
             />
             <Metric
-              label="DEADLINE ATTAINMENT"
+              label="DELIVERED WITHIN TARGET"
               value={$(m.attainment, 1)}
               unit="%"
               note="Delivered outputs · trailing 1h"
@@ -574,7 +693,11 @@ export default function App() {
                 ))}
               </select>
               <p>
-                Parameters change the live model. Reset for an isolated run.
+                <Terms>
+                  {
+                    "Parameters change the live model. Reset for an isolated run."
+                  }
+                </Terms>
               </p>
             </div>
             <div>
@@ -621,7 +744,7 @@ export default function App() {
               </button>
             </div>
           </div>
-          <div className="workspace">
+          <div className="workspace" id="simulation-workspace">
             <div className="workspace-toolbar">
               <div className="view-tabs">
                 {[
@@ -635,6 +758,8 @@ export default function App() {
                   <button
                     key={id}
                     className={view === id ? "active" : ""}
+                    title={explanation(label)}
+                    aria-description={explanation(label)}
                     onClick={() => setView(id)}
                   >
                     <C size={14} />
@@ -691,6 +816,7 @@ export default function App() {
                       >
                         <GitBranch size={14} /> Follow a package
                       </button>
+                      <HelpLabel label="Graph metric" />
                       <select
                         aria-label="Graph metric"
                         value={lens}
@@ -730,32 +856,25 @@ export default function App() {
                         <i className="amber-dot" />
                         Review / fallback
                       </span>
-                      <span>Scroll to zoom · drag to pan</span>
+                      <span>
+                        Select a stage for full-size details · zoom or pan to
+                        explore
+                      </span>
                     </div>
                   </div>
                   <div className="platform-strip">
                     <span>CONTROL & DATA FOUNDATION</span>
-                    <button onClick={() => setView("decisions")}>
-                      <Workflow size={13} />
-                      Temporal
-                    </button>
-                    <button onClick={() => setView("decisions")}>
-                      <Database size={13} />
-                      S3 + PostgreSQL
-                    </button>
-                    <button onClick={() => setView("decisions")}>
-                      <Activity size={13} />
-                      OpenTelemetry
-                    </button>
-                    <button
-                      onClick={() => {
-                        setControls("capacity");
-                        setMobileControls(true);
-                      }}
-                    >
-                      <Layers3 size={13} />
-                      K8s + KEDA
-                    </button>
+                    {[
+                      ["Temporal", Workflow],
+                      ["S3 + PostgreSQL", Database],
+                      ["OpenTelemetry", Activity],
+                      ["K8s + KEDA", Zap],
+                    ].map(([label, C]) => (
+                      <div className="foundation-item" key={label}>
+                        <C size={14} />
+                        <HelpLabel term label={label} />
+                      </div>
+                    ))}
                   </div>
                   <div
                     className={`system-insight ${bottleneck ? "has-pressure" : ""}`}
@@ -826,7 +945,7 @@ export default function App() {
               <div className="console-heading">
                 <span>
                   <Terminal size={14} />
-                  LIVE EVENT STREAM <i>{running ? "streaming" : "paused"}</i>
+                  PACKAGE EVENTS <i>{running ? "streaming" : "paused"}</i>
                 </span>
                 <select
                   aria-label="Event filter"
@@ -853,7 +972,12 @@ export default function App() {
                   .map((e, i) => (
                     <div className={"event " + e.level} key={`${e.time}-${i}`}>
                       <time>{timeLabel(e.time)}</time>
-                      <span className="event-stage">{e.stage}</span>
+                      <span className="event-stage">
+                        {STAGES.find((stage) => stage.id === e.stage)?.name ||
+                          (e.stage === "control"
+                            ? "Configuration"
+                            : "Run status")}
+                      </span>
                       <span>{e.message}</span>
                     </div>
                   ))}
@@ -944,8 +1068,11 @@ export default function App() {
           onClose={() => setModal(null)}
         >
           <p className="modal-intro">
-            Apply an experiment to the current run. Reset first if you want a
-            clean comparison.
+            <Terms>
+              {
+                "Apply an experiment to the current run. Reset first if you want a clean comparison."
+              }
+            </Terms>
           </p>
           <div className="scenario-grid">
             {SCENARIOS.map((s) => (
@@ -975,8 +1102,11 @@ export default function App() {
       {modal === "reset" && (
         <Modal title="Start a fresh experiment" onClose={() => setModal(null)}>
           <p className="modal-intro">
-            Clear elapsed time, queues, costs and outcomes. Your saved
-            comparison checkpoint stays available.
+            <Terms>
+              {
+                "Clear elapsed time, queues, costs and outcomes. Your saved comparison checkpoint stays available."
+              }
+            </Terms>
           </p>
           <div className="reset-options">
             <button
@@ -1009,76 +1139,78 @@ export default function App() {
           onClose={() => setModal(null)}
         >
           <p className="modal-intro">
-            This React application runs a seeded, discrete-time queue
-            simulation. No external models are called. The technologies shown
-            are proposed implementations backed by linked documentation.
+            <Terms>
+              {
+                "This React application runs a seeded, discrete-time queue simulation. No external models are called. The technologies shown are proposed implementations backed by linked documentation."
+              }
+            </Terms>
           </p>
           <div className="model-notes">
             <h3>What is simulated</h3>
             <p>
-              One-second simulation steps. FIFO queues with finite service
-              slots; speech/vision fan-out and join; one localized derivative
-              per selected language; asynchronous indexing; bounded transient
-              speech retries with exponential backoff and jitter; first-pass
-              quality gates, finite human review, policy holds and a final
-              rights check. Speech autoscaling waits 60 seconds and caps at 3×
-              configured capacity or 24 slots.
+              <Terms>
+                {
+                  "One-second simulation steps. FIFO queues with finite service slots; speech/vision fan-out and join; one localized derivative per selected language; asynchronous indexing; bounded transient speech retries with exponential backoff and jitter; first-pass quality gates, finite human review, policy holds and a final rights check. Speech autoscaling waits 60 seconds and caps at 3\u00d7 configured capacity or 24 slots."
+                }
+              </Terms>
             </p>
             <h3>Workload and service times</h3>
+            <p>
+              <Terms>
+                {
+                  "Each source duration is sampled from the selected catalog mix (or the custom range). Expected mean duration controls the arrival rate; each package\u2019s actual duration controls its processing work. Catalog randomness is separate from model execution randomness. Source arrivals are evenly spaced, rather than a measured burst pattern."
+                }
+              </Terms>
+            </p>
             <pre>
-              assets/s = source_hours_per_day × 60 / (86400 × asset_minutes)
+              assets/s = source_hours_per_day × 60 / (86400 ×
+              mean_source_minutes)
               <br />
-              output_minutes = asset_minutes × clip_ratio × languages
+              output_minutes = actual_source_minutes × selected_share ×
+              languages
               <br />
               service_seconds = fixed_overhead + media_minutes × 60 × RTF
               <br />
               actual_service = service_seconds × uniform(0.8, 1.2)
             </pre>
             <p>
-              New assets capture their language count, extraction ratio and
-              deadline at admission. Existing work keeps those values. Resource
-              limits and gate thresholds apply live; service time and speech
-              model are sampled when a task starts. Arrivals are evenly spaced.
-              The initial view includes 15 simulated minutes of warm-up.
+              <Terms>
+                {
+                  "New assets capture their language count, extraction ratio and deadline at admission. Existing work keeps those values. Resource limits and gate thresholds apply live; service time and speech model are sampled when a task starts. Arrivals are evenly spaced. The initial view includes 15 simulated minutes of warm-up."
+                }
+              </Terms>
             </p>
             <h3>Economic assumptions, not vendor prices</h3>
             <p>
-              Each provisioned GPU slot costs an illustrative $2.40/h; each CPU
-              slot $0.12/h; each staffed reviewer $30/h. Speech uses an
-              additional profile-specific variable processing fee; fallback uses
-              $0.18/output minute and RTF 0.85. Other per-stage assumptions are
-              defined in the source catalog. Idle capacity is charged. No actual
-              vendor pricing, benchmark or savings claim is implied.
+              <Terms>
+                {
+                  "Each provisioned GPU slot costs an illustrative $2.40/h; each CPU slot $0.12/h; each staffed reviewer $30/h. Speech uses an additional profile-specific variable processing fee; fallback uses $0.18/output minute and RTF 0.85. Other per-stage assumptions are defined in the source catalog. Idle capacity is charged. No actual vendor pricing, benchmark or savings claim is implied."
+                }
+              </Terms>
             </p>
             <h3>Quality and reliability</h3>
             <p>
-              Synthetic quality is a profile mean plus three centered uniform
-              draws × 14, clamped to 0–100. It is not a measured WER, MOS or
-              clinical quality score. Review takes approximately three minutes,
-              with an illustrative 82% approval rate. Speech has a 2.5%
-              transient failure chance. An outage fails in-flight primary work;
-              fallback jobs continue. Failed attempts remain billed.
+              <Terms>
+                {
+                  "Synthetic quality is a profile mean plus three centered uniform draws \u00d7 14, clamped to 0\u2013100. It is not a measured WER, MOS or clinical quality score. Review takes approximately three minutes, with an illustrative 82% approval rate. Speech has a 2.5% transient failure chance. An outage fails in-flight primary work; fallback jobs continue. Failed attempts remain billed."
+                }
+              </Terms>
             </p>
             <h3>Read the metrics carefully</h3>
             <p>
-              Throughput uses the trailing five simulated minutes. p95 uses the
-              last 5,000 delivered derivatives and excludes unfinished work;
-              pair it with queue age. Deadline attainment uses delivered outputs
-              in the trailing hour and each asset’s admission-time deadline, not
-              a full arrival-cohort SLO. Cost per accepted minute includes all
-              run spend and work in progress. Drain the pipeline (set arrivals
-              to zero) and compare equal workloads for a controlled experiment.
+              <Terms>
+                {
+                  "Throughput uses the trailing five simulated minutes. p95 uses the last 5,000 delivered derivatives and excludes unfinished work; pair it with queue age. Deadline attainment uses delivered outputs in the trailing hour and each asset\u2019s admission-time deadline, not a full arrival-cohort SLO. Cost per accepted minute includes all run spend and work in progress. Drain the pipeline (set arrivals to zero) and compare equal workloads for a controlled experiment."
+                }
+              </Terms>
             </p>
             <h3>Boundaries of this model</h3>
             <p>
-              Source assets are fixed-duration within a run configuration. API
-              and I/O capacities are simplified. There is no GPU-memory
-              scheduling, tenant fair-share scheduler, stochastic arrival burst
-              model, explicit storage retention billing, post-publication
-              takedown or live provider reconciliation. Analysis-cache hits
-              bypass speech and vision only. Admissions are deferred beyond
-              3,000 pending tasks or 100 queued ingests. Event and trace buffers
-              are bounded for browser performance.
+              <Terms>
+                {
+                  "Each source duration is sampled from a catalog mix. Custom duration ranges use a uniform distribution; mix presets sample weighted lengths with ±20% jitter. Fixed-size input is retained only for legacy controlled tests. API and I/O capacities are simplified. There is no GPU-memory scheduling, tenant fair-share scheduler, stochastic arrival burst model, explicit storage retention billing, post-publication takedown or live provider reconciliation. Analysis-cache hits bypass speech and vision only. Admissions are deferred beyond 3,000 pending tasks or 100 queued ingests. Event and trace buffers are bounded for browser performance."
+                }
+              </Terms>
             </p>
             <h3>Reproducibility</h3>
             <p>
