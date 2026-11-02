@@ -1,134 +1,117 @@
-import { Terms } from "../components/Help.jsx";
 import React from "react";
-import { Activity, BookOpen, Database, Layers3, Workflow } from "lucide-react";
-
+import { SOURCES } from "../catalog.js";
+import { Terms } from "../components/Help.jsx";
 export default function Blueprint() {
+  const decisions = [
+    [
+      "01",
+      "Partition, do not summarize",
+      "Complete source coverage",
+      "Cut the full video before per-chunk normalization, using a hard duration cap or scene-informed boundaries. Retain source intervals and a manifest version. Shot detection is not semantic comprehension.",
+      "Tradeoff: smaller chunks increase provider requests and human decisions, while larger chunks approach provider limits.",
+    ],
+    [
+      "02",
+      "Let ElevenLabs own the audio pipeline",
+      "Managed dubbing boundary",
+      "Prepare a source project per chunk, generate target-language audio and retrieve immutable versioned artifacts. Do not duplicate the provider’s internal translation or speech pipeline as mandatory custom stages.",
+      "Plan constraint: transcript editing and regeneration features depend on the ElevenLabs account; new-request and revision adapters must honor actual entitlements.",
+    ],
+    [
+      "03",
+      "Human audio approval is a hard gate",
+      "Exact artifact, explicit decision",
+      "Record source version, chunk, language, audio version, content hash, reviewer, checklist and decision. A new recording invalidates the previous approval. A score or timeout never substitutes for a person.",
+      "Production requirement: authenticated reviewers, durable decision storage and revocation-aware workflow signals. Browser decisions here are session-local demonstrations.",
+    ],
+    [
+      "04",
+      "Sync gets the approved recording",
+      "Separate video + audio inputs",
+      "Submit the matching source video chunk and exact approved audio to Sync. Preserve the provider job ID and approved artifact lineage. Do not use dubParams, which would regenerate audio inside a combined job.",
+      "Operational constraint: provider account concurrency, supported media, duration limits, speaker targeting and frame-based billing require explicit configuration.",
+    ],
+    [
+      "05",
+      "Join complete language batches",
+      "Ordered reassembly + second human gate",
+      "Wait for every required chunk of the source/language batch. Validate order, coverage and audio approvals, then assemble a complete video. Require a second human approval of its exact version and constituent parts.",
+      "Failure rule: a missing or rejected chunk blocks the complete program. Final rejection holds the assembly for remediation; it does not silently publish a partial video.",
+    ],
+    [
+      "06",
+      "Orchestrate for recoverability",
+      "Durable workflow + immutable artifacts",
+      "Temporal is a proposed production coordinator for provider activities, joins and human signals. Versioned object storage and a database retain artifact manifests, decisions and logical delivery keys.",
+      "Implementation limit: the browser runs a deterministic in-memory model, not Temporal, provider webhooks, durable approval storage or live invoice reconciliation.",
+    ],
+  ];
   return (
     <div className="workspace-view blueprint">
       <div className="view-title">
         <div>
-          <span className="eyebrow">TECHNICAL STRATEGY</span>
-          <h2>Architecture decisions & alternatives</h2>
+          <span className="eyebrow">
+            SELECTED ARCHITECTURE / SOURCE-VERIFIED INTERFACES
+          </span>
+          <h2>Two human decisions around external providers.</h2>
           <p>
-            <Terms>
-              {
-                "A proposed reference architecture for media transformation at catalog scale."
-              }
-            </Terms>
-          </p>
-        </div>
-        <BookOpen size={32} />
-      </div>
-      <div className="blueprint-callout">
-        <Workflow size={25} />
-        <div>
-          <h3>Control plane owns decisions. Data plane moves media.</h3>
-          <p>
-            <Terms>
-              {
-                "Temporal persists workflow history and coordinates activities. Object storage holds immutable artifacts. Independently bounded CPU, GPU, API and reviewer pools execute each stage."
-              }
-            </Terms>
+            The selected flow uses ElevenLabs for dubbed audio and Sync for
+            visual lip synchronization, with batch reassembly between the two
+            review gates.
           </p>
         </div>
       </div>
       <div className="decision-grid">
-        {[
-          [
-            "01",
-            "Durability before orchestration cleverness",
-            "Temporal + transactional manifests",
-            "Use durable activity boundaries, stable logical identifiers and segment checkpoints. An agent can propose a plan; deterministic code controls rights, spend and delivery.",
-            "Alternative: Step Functions for an AWS-centered system; compare execution limits, economics and operational ownership.",
-          ],
-          [
-            "02",
-            "Swappable models, stable contracts",
-            "Provider adapters + versioned evals",
-            "Treat each provider as an implementation behind a typed contract. Run a paired bake-off on representative multilingual slices before routing production work.",
-            "Tradeoff: abstraction must preserve provider-specific capabilities, reconciliation IDs and billing semantics.",
-          ],
-          [
-            "03",
-            "Scale the constrained resource",
-            "Kubernetes + KEDA + Triton",
-            "Queue age and pending media minutes reveal overload better than CPU alone. Separate speech, vision, decode, encode and external-provider budgets.",
-            "Tradeoff: GPU warm-up, device availability and batch waiting time can dominate tail latency.",
-          ],
-          [
-            "04",
-            "Quality is a product contract",
-            "Deterministic checks + calibrated review",
-            "Combine format, silence and sync verification with meaning, naturalness and editorial rubrics. Human review is an explicit finite service station.",
-            "Tradeoff: stricter gates can improve output confidence while consuming reviewer capacity and deadline budget.",
-          ],
-          [
-            "05",
-            "Rights propagate through lineage",
-            "OPA + tenant-scoped storage + audit",
-            "Carry consent, territory and allowed transformation metadata. Revalidate at transfer and delivery; invalidate derivatives and indexes on revocation.",
-            "Tradeoff: previously published media requires a separate takedown and reconciliation process; a gate alone is insufficient.",
-          ],
-          [
-            "06",
-            "Measure useful completion",
-            "OpenTelemetry + acceptance cost ledger",
-            "Trace every stage, join provider request IDs, and record all spend—including rejected work—against accepted output minutes.",
-            "Tradeoff: completed-only latency is biased during overload. Inspect pending age alongside p95 and deadline attainment.",
-          ],
-        ].map(([num, title, tools, body, trade]) => (
-          <article className="decision-card" key={num}>
-            <span className="decision-number">{num}</span>
+        {decisions.map(([number, title, tools, body, trade]) => (
+          <article className="decision-card" key={number}>
+            <span className="decision-number">{number}</span>
             <h3>{title}</h3>
             <span className="tag">{tools}</span>
-            <p>{body}</p>
-            <div>{trade}</div>
+            <p>
+              <Terms>{body}</Terms>
+            </p>
+            <div>
+              <Terms>{trade}</Terms>
+            </div>
           </article>
         ))}
       </div>
-      <div className="analysis-card">
-        <h3>Cross-cutting operational plane</h3>
+      <section className="analysis-card">
+        <h3>Verified documentation</h3>
         <div className="operational-grid">
-          <a
-            href="https://docs.temporal.io/workflows"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Workflow />
-            Temporal<small>Durable workflow history</small>
-          </a>
-          <a
-            href="https://opentelemetry.io/docs/concepts/signals/traces/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Activity />
-            OpenTelemetry<small>Traces, metrics, logs</small>
-          </a>
-          <a
-            href="https://keda.sh/docs/2.18/scalers/aws-sqs/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Layers3 />
-            KEDA<small>Queue-driven capacity</small>
-          </a>
-          <a
-            href="https://www.postgresql.org/docs/current/ddl-rowsecurity.html"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Database />
-            PostgreSQL<small>Manifest and audit ledger</small>
-          </a>
+          {[
+            [
+              "ElevenLabs Dubbing",
+              SOURCES.eleven,
+              "Project, language target and audio download",
+            ],
+            [
+              "Sync manual dubbing flow",
+              SOURCES.sync,
+              "Source video + approved external audio",
+            ],
+            [
+              "Sync segments",
+              SOURCES.syncSegments,
+              "Speaker and time-range targeting",
+            ],
+            [
+              "Sync billing",
+              SOURCES.syncBilling,
+              "Usage basis and plan-specific rates",
+            ],
+          ].map(([label, url, detail]) => (
+            <a href={url} target="_blank" rel="noreferrer" key={url}>
+              {label}
+              <small>{detail}</small>
+            </a>
+          ))}
         </div>
-      </div>
+      </section>
       <p className="subtle-note">
-        <Terms>
-          {
-            "Created and owned by Hassan Uriostegui. An independent reference architecture for catalog-scale media AI systems."
-          }
-        </Terms>
+        Created and owned by Hassan Uriostegui. Provider capabilities are linked
+        to documentation; performance inputs and preview fixtures are not
+        production quality evidence.
       </p>
     </div>
   );

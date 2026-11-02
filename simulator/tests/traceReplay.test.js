@@ -1,96 +1,78 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Simulation } from "../src/engine.js";
 import { traceSteps, traceState, traceCommentary } from "../src/traceReplay.js";
-
-test("replay preserves parallel timestamps and completion order without mutating lineage", () => {
+test("parallel chunk history preserves timestamps in completion order", () => {
   const job = {
     born: 0,
     path: [
-      { stage: "prepare", start: 0, end: 10 },
-      { stage: "asr", start: 10, end: 40 },
-      { stage: "vision", start: 10, end: 25 },
-      { stage: "clips", start: 40, end: 45 },
+      { stage: "dub", start: 10, end: 40, segmentIndex: 0 },
+      { stage: "dub", start: 10, end: 25, segmentIndex: 1 },
+      {
+        stage: "audio_review",
+        start: 25,
+        end: 35,
+        decision: "approved",
+        audioVersion: 1,
+        reviewer: "Reviewer",
+        segmentIndex: 1,
+      },
     ],
   };
   const steps = traceSteps(job);
-  assert.deepEqual(
-    steps.map((s) => s.stage),
-    ["prepare", "vision", "asr", "clips"],
-  );
-  assert.equal(job.path[1].stage, "asr");
-  const state = traceState(job, steps, 1);
-  assert.equal(state.states.asr, "In parallel");
-  assert.equal(state.states.vision, "At this step");
-  assert.equal(state.states.clips, "Upcoming");
-  assert.equal(state.edges.has("prepare-clips"), false);
+  assert.equal(steps[0].segmentIndex, 1);
+  assert.equal(steps[1].stage, "audio_review");
+  assert.equal(traceState(job, steps, 0).states.dub, "At this step");
+  assert.equal(job.path[0].end, 40);
 });
-
-test("cache and human review routes never imply unexecuted shortcut edges", () => {
+test("unfinished approval snapshots do not describe an automatic completion", () => {
   const job = {
     born: 0,
-    path: [
-      "ingest",
-      "policy",
-      "prepare",
-      "clips",
-      "translate",
-      "tts",
-      "qc",
-      "review",
-      "publish",
-    ].map((stage, i) => ({ stage, start: i, end: i + 1 })),
-  };
-  const steps = traceSteps(job),
-    state = traceState(job, steps, 8);
-  assert.equal(state.cached, true);
-  assert.ok(state.edges.has("prepare-clips"));
-  assert.ok(state.edges.has("review-publish"));
-  assert.equal(state.edges.has("qc-publish"), false);
-  assert.equal(state.states.asr, "Outside this trace");
-  assert.match(traceCommentary(job, steps[2], steps).text, /cache hit/);
-});
-
-test("retry narration distinguishes failed attempts from exhausted outcomes", () => {
-  const job = {
-    born: 0,
-    status: "retry budget exhausted",
-    path: [
-      { stage: "tts", start: 10, end: 20, queuedAt: 5, attempt: 1 },
-      { stage: "tts", start: 30, end: 40, queuedAt: 20, attempt: 2 },
-    ],
+    status: "awaiting audio approval",
+    stage: "audio_review",
+    queuedAt: 20,
+    ended: 100,
+    audioVersion: 2,
+    path: [],
   };
   const steps = traceSteps(job);
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].inProgress, true);
   assert.match(
     traceCommentary(job, steps[0], steps).text,
-    /returned to the speech queue/,
+    /held for a human decision/,
   );
-  assert.match(
-    traceCommentary(job, steps[1], steps).text,
-    /exhausted the retry budget/,
-  );
-  assert.equal(traceCommentary(job, steps[1], steps).wait, 10);
+  assert.equal(traceState(job, steps, 0).route.has("lipsync"), false);
 });
-
-test("recorded thresholds, queue times and model routing survive configuration changes", () => {
-  const sim = new Simulation({ cache: 0, quality: 90 }, 1800);
-  const job = sim.completed.find((j) => j.score != null);
-  assert.ok(job);
-  const before = JSON.stringify(job);
-  sim.configure({ quality: 50, model: "economy", outage: true });
-  assert.equal(JSON.stringify(job), before);
-  assert.equal(job.qualityThreshold, 90);
-  for (const span of job.path) assert.ok(span.start >= span.queuedAt);
-  const speech = job.path.find((p) => p.stage === "tts");
-  assert.equal(speech.model, "balanced");
-  assert.equal(speech.fallback, false);
-  const steps = traceSteps(job);
+test("audio decisions and final decisions remain distinct in commentary", () => {
+  const job = {
+    sourceMinutes: 12,
+    locale: "es",
+    segmentCount: 3,
+    parts: [1, 2, 3],
+    asset: "demo",
+  };
   assert.match(
     traceCommentary(
       job,
-      steps.find((s) => s.stage === "qc"),
-      steps,
+      {
+        stage: "audio_review",
+        decision: "approved",
+        audioVersion: 2,
+        reviewer: "Audio editor",
+        start: 0,
+        end: 10,
+        approvalId: "a1",
+      },
+      [],
     ).text,
-    /threshold of 90/,
+    /Audio editor/,
+  );
+  assert.match(
+    traceCommentary(
+      job,
+      { stage: "final_review", decision: "rejected", start: 10, end: 20 },
+      [],
+    ).text,
+    /held after final review/,
   );
 });

@@ -4,8 +4,8 @@
 
 Created and owned by Hassan Uriostegui.
 
-- **`simulator/`** — React Architecture Lab: live node graph, capacity planning, model economics, failure scenarios, execution traces and a 50-question architecture inspection.
-- **`academy/index.html`** — the original offline Principal AI Engineering Academy.
+- **`simulator/`** — React Architecture Lab: source batching → normalization → ElevenLabs audio → human audio approval → Sync lip sync → reassembly → final human approval → delivery. Includes playable reference/local previews, capacity and cost planning, trace replay and 50 inspection questions.
+- **`academy/index.html`** — the original offline Principal AI Engineering Academy (legacy general training, separate from the selected simulator architecture).
 
 Start the simulator:
 

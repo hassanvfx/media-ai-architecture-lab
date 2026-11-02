@@ -87,44 +87,43 @@ export function sampleSourceMinutes(config, random) {
   }
   return selected * (0.8 + random() * 0.4);
 }
-export function selectedShare(config) {
-  return config.plan === "full" ? 1 : config.clipRatio / 100;
+export function selectedShare() {
+  return 1;
 }
-export function stageName(stage, config) {
-  if (stage.id === "clips")
-    return config.plan === "full"
-      ? "Prepare the full program"
-      : "Select highlight segments";
+export function stageName(stage) {
   return stage.name;
 }
+export function stageInfo(stage) {
+  return stage;
+}
 
-export function stageInfo(stage, config) {
-  if (stage.id !== "clips") return stage;
-  if (config.plan === "full")
-    return {
-      ...stage,
-      name: stageName(stage, config),
-      short: "Program plan",
-      purpose:
-        "Keep the full source timeline and prepare dialogue, speakers and timing targets for each destination language. No highlight extraction or shortening is requested.",
-      input: "transcript + speaker_turns + source_timeline + visual_events",
-      output:
-        "full_program_plan · dialogue_segments · speaker_map · timing_targets · language_jobs[]",
-      decision:
-        "Retain every source interval. Segment dialogue for translation and timing adaptation, then create language-specific work from the shared full-program plan. Do not apply highlight ranking or editorial shortening in this mode.",
-      failure:
-        "Missing dialogue or invalid timing targets block the plan. Preserve source references so a correction can be retried without changing the complete program timeline.",
-      metric:
-        "Dialogue coverage · timing-plan validity · source correspondence",
-      code: "await join(speech_activity, vision_activity)\nplan = preserve_full_timeline(transcript, speaker_turns, source_timeline)\nvalidate_dialogue_coverage(plan)\nawait fan_out(localize(plan, language) for language in targets)",
-    };
-  return {
-    ...stage,
-    name: stageName(stage, config),
-    short: config.plan === "full" ? "Program plan" : "Highlights",
-    purpose:
-      config.plan === "full"
-        ? "Keep the full source timeline and prepare a dialogue-and-timing plan for each destination language. This mode does not select or shorten source segments."
-        : "Choose coherent source intervals for shorter highlights, then localize the selected material. The simulation represents their aggregate duration, not exact edit boundaries or a clip count.",
-  };
+// A partition of the entire source, not highlight selection. Scene boundaries
+// are synthetic in this browser model; a production detector supplies timestamps.
+export function segmentSource(sourceMinutes, mode, maxMinutes, random) {
+  const total = sourceMinutes * 60,
+    limit = maxMinutes * 60,
+    chunks = [];
+  let start = 0;
+  while (start < total - 1e-7) {
+    const length = mode === "scene" ? limit * (0.5 + 0.5 * random()) : limit;
+    const end = Math.min(total, start + length);
+    chunks.push({
+      index: chunks.length,
+      start,
+      end,
+      minutes: (end - start) / 60,
+    });
+    start = end;
+  }
+  return chunks;
+}
+export function validCoverage(parts, sourceMinutes) {
+  const sorted = [...parts].sort((a, b) => a.start - b.start);
+  let end = 0;
+  for (const part of sorted) {
+    if (Math.abs(part.start - end) > 1e-6 || part.end <= part.start)
+      return false;
+    end = part.end;
+  }
+  return sorted.length > 0 && Math.abs(end - sourceMinutes * 60) < 1e-6;
 }

@@ -1,62 +1,62 @@
-# Hassan Uriostegui Architecture Lab
+# Hassan Uriostegui · Dubbing & Lip-Sync Architecture Lab
 
-A React application for presenting and interrogating a proposed catalog-scale media AI architecture. Created and owned by Hassan Uriostegui. Entirely browser-side: no inference calls, credentials, backend or customer media.
+A React browser simulator for this selected, source-verified flow:
 
-## Run
+**Complete source → ordered chunk batches → per-chunk normalization → ElevenLabs dubbed audio → human audio approval → Sync lip sync → full-program reassembly → final human approval → delivery.**
 
-Requires Node.js 22+ and npm.
+[Live demo](https://hassanvfx.github.io/media-ai-architecture-lab/) · [Public repository](https://github.com/hassanvfx/media-ai-architecture-lab)
+
+Created and owned by Hassan Uriostegui. It makes no provider requests or paid calls. It does not clip, dub, lip-sync or reassemble actual customer media.
+
+## Run and verify
+
+Node.js 22+ and npm:
 
 ```sh
 cd simulator
 npm ci
 npm run dev
+npm test
+npm run build
+npm run preview
 ```
 
-From this directory, omit `cd simulator`. Open the printed local URL. `npm test` runs the outcome and acceptance checks; `npm run build` produces `dist/`; `npm run preview` serves the production build.
+The GitHub Pages workflow on `main` installs, tests and builds the app, includes the original offline academy under `/academy/`, then publishes the static artifact. Relative asset URLs support repository subpaths.
 
-## Present
+## Present the workflow
 
-1. **Start with the process explanation:** choose full-program dubbing or dubbed highlights. Read the 30-minute worked example and open each phase disclosure. Source videos vary in length according to the selected catalog mix; the source language is English and named destinations are shown.
-2. **System architecture:** describe shared source analysis, locale fan-out, explicit quality gates and final rights checks. Select any stage for suggested tools, contracts and failure boundaries.
-3. **Capacity planning:** apply 10× catalog growth and identify offered load above available capacity. Explain why an upstream bottleneck can conceal downstream demand.
-4. **Model economics:** run a controlled comparison. Thirty minutes of demand is admitted into each profile, followed by at most three hours of draining. Undrained results are explicitly flagged.
-5. **Execution traces:** inspect a delivered or blocked derivative and explain stage service time versus queue wait.
-6. **Inspect:** 50 searchable questions across 10 responsibilities, each with an answer, scope statement and evidence navigation. Export the complete Markdown brief.
+1. Read the process overview and 30-minute worked example. Explain the difference between variable **source duration** and a chosen **maximum chunk duration**.
+2. In Model inputs, choose maximum-duration or scene-informed segmentation. Both preserve the complete source; the scene mode uses synthetic boundaries rather than claiming real content analysis.
+3. Open **Audio approval**. Play the clearly labeled reference recording, confirm the demo checks and approve it—or load actual dubbed audio locally. Request changes to demonstrate invalidation of a prior version. Rejecting a required chunk holds that source/language batch.
+4. Advance the simulation or leave it running. Only audio with matching source/chunk/language/version/hash approval can start Sync.
+5. In **Final review**, inspect batch progress. Missing chunks block full-program reassembly. Once all chunks complete, preview the reference waveform video or a real locally loaded assembly, confirm checks, and explicitly approve delivery or hold it.
+6. Inspect package traces, capacity estimates, provider/human cost breakdown and the 50 questions under **Inspect**. Planning assumptions never create live approvals.
 
-See [DEMO.md](docs/DEMO.md) for a seven-minute presentation and [MODEL.md](docs/MODEL.md) for mathematical assumptions.
+See [DEMO.md](docs/DEMO.md), [MODEL.md](docs/MODEL.md), [DESIGN_REVIEW.md](docs/DESIGN_REVIEW.md) and [ACCEPTANCE.md](docs/ACCEPTANCE.md).
 
-## GitHub Pages
+## Real provider boundary
 
-The repository-root `.github/workflows/deploy-pages.yml` is ready for a repository whose default branch is `main`:
+- [ElevenLabs Dubbing](https://elevenlabs.io/docs/eleven-api/guides/cookbooks/dubbing): source project, target language, completed dubbed audio.
+- [Sync manual dubbing](https://sync.so/docs/tutorials/video-dubbing-api-guide): source video chunk plus separately supplied, approved translated audio. **No `dubParams`**, because automatic re-dubbing would bypass the audio review.
+- [Sync billing](https://sync.so/docs/product/billing): plan-specific usage and frame-rate effects. Model references use documented legacy rates at 25 fps. The active fee inputs are editable estimates, not an account quote; processing factors and human effort are not measured benchmarks.
 
-1. Push this project, including the repository-root workflow, to your GitHub repository.
-2. In **Settings → Pages → Build and deployment**, select **GitHub Actions**.
-3. Push to `main` or run **Deploy Pipeline Observatory to GitHub Pages** manually.
+Provider access, actual media formats, duration limits, speaker targeting, invoice/refund behavior and editing entitlements need production validation.
 
-The workflow uses Node 22, installs the lockfile, runs tests, builds the app, copies the existing academy into `dist/academy`, uploads the static artifact, and deploys it. The simulator appears at the repository's Pages root and the academy at `/academy/` beneath that root. Relative Vite asset paths work with both repository subpaths and custom domains. There is no client-side history router requiring server rewrites.
+## Preview fixtures and local files
 
-Public source: [hassanvfx/media-ai-architecture-lab](https://github.com/hassanvfx/media-ai-architecture-lab). The [live demo](https://hassanvfx.github.io/media-ai-architecture-lab/) is deployed from `main` through GitHub Actions.
+The bundled Spanish, French and German MP3 files were synthesized locally for interaction testing, not by ElevenLabs. Their MP4 counterparts are waveform visualizations, not talking-face Sync results. They are visibly labeled. No real provider-output quality is implied.
 
-Local hosting metadata in `.openai` is ignored and is not included in the repository or deployment.
+Users may load audio or video into their own browser. The app calculates a local SHA-256 and resets the review version. Files are not uploaded. Object URLs and review decisions exist only in the current session and are cleared by reset/reload; production needs authenticated reviewers, immutable artifact storage and durable decisions.
 
 ## Source structure
 
-- `src/engine.js`: deterministic simulation, analytical capacity model, controlled profile comparison.
-- `src/catalog.js`: stage topology, contracts, suggested tools, scenario presets and model profiles.
-- `src/review.js`: 50 architecture questions and evidence mappings.
-- `src/App.jsx`: run controls, configuration, navigation and scenario state.
-- `src/components/`: graph, inspector, shared controls and charts.
-- `src/views/`: capacity, economics, traces, design rationale and inspection.
-- `tests/`: outcome contracts and inspection acceptance coverage.
+- `src/engine.js`: deterministic queues, two manual gates, version invariants, ordered joins, modeled fees and separate planning functions.
+- `src/workload.js`: variable source distributions, duration/scene-informed partitions and coverage validation.
+- `src/catalog.js`: ten selected stages, provider sources, contracts and scenarios.
+- `src/views/ReviewRoom.jsx`: audio and final-video preview/decision screens.
+- `src/traceReplay.js` and `components/TraceReplay.jsx`: chronological, chunk-aware snapshots and commentary.
+- `src/helpContent.js` and `components/Help.jsx`: contextual explanations and searchable glossary.
+- `src/review.js`: 50 current-flow questions, answers and evidence routes.
+- `tests/`: outcome and invariant checks, including both gates, source coverage, revisions, rights, failures and costs.
 
-All stage service times, rates and quality profiles are illustrative model assumptions. Tool recommendations are linked to official documentation. The application is an independent reference architecture by Hassan Uriostegui.
-
-Configuration and manual review progress are saved in browser local storage. Share links and JSON imports recreate parameters, not prior queue state or an edit replay. Fonts are requested from Google Fonts; system fallbacks work when those requests are unavailable.
-
-### Follow one package
-
-Choose **Follow a package** on the architecture canvas, or open **Execution traces**. Select an outcome to pin a recorded package. Use **Play story**, previous/next, the scrubber or a graph node to navigate its spans. Commentary explains the observed route, including cache bypass, parallel analysis, locale fan-out, retries, quality gates and final disposition. Each step includes processing time, queue/backoff time and an expandable proposed contract. Playback is independent of the live simulation and preserves recorded timestamps; it is a replay of completed outcomes, not an in-flight debugger.
-
-### Terminology and variable source lengths
-
-Use question-mark disclosures beside controls, metrics and stage names, or dotted technical terms, for hover, keyboard-focus and tap explanations. **Terms & labels** provides a searchable reference. Presets describe incoming catalog distributions; custom bounds describe an observed duration range. Each admitted video captures its sampled length and output plan. Changing the plan applies to future arrivals. Full-program dubbing keeps all source minutes; highlights retain the chosen share as aggregate selected minutes, without claiming exact clip boundaries.
+Configuration and inspection progress use local storage. Shared links and imports recreate assumptions, not approvals or previous queues. Fonts have system fallbacks. Local hosting metadata in `.openai` is ignored.

@@ -178,7 +178,7 @@ export function HelpProvider({ children }) {
                 <input
                   ref={search}
                   aria-label="Search terms and labels"
-                  placeholder="Try clip, GPU, queue, cost…"
+                  placeholder="Try chunk, approval, Sync, cost…"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />

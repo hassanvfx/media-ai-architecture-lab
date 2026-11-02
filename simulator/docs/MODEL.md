@@ -1,73 +1,80 @@
-# Simulation model
+# Selected workflow and simulation model
 
-## Mechanics
+## State machine
 
-The engine advances in one-second simulated steps. A seeded linear congruential generator drives service-time jitter, cache hits, synthetic quality, transient errors and review outcomes. The same initial configuration, seed and configuration-change schedule produce the same trajectory. The opening view runs 1,800 seconds of warm-up. Reset starts at zero.
+Receive source → rights → segment → normalize chunk → ElevenLabs audio → **manual audio gate** → Sync → ordered source/language join → reassembly → **manual final gate** → delivery.
 
-Arrivals are evenly spaced rather than Poisson:
+Every source interval is preserved. There is no mandatory custom ASR, translation model, self-hosted speech GPU fleet or highlight-extraction branch. ElevenLabs owns managed audio dubbing; Sync receives a source chunk and separate approved audio.
 
-```
-source_minutes_per_hour = source_hours_per_day × 60 / 24
-assets_per_second = source_hours_per_day × 60 / (86400 × expected_mean_source_minutes)
-localized_minutes_per_asset = sampled_source_minutes × selected_share × destination_language_count
-```
+## Catalog and segmentation
 
-Source durations vary by package. The mixed catalog samples lengths centered on 2, 5, 12 and 30 minutes with probabilities 20%, 40%, 30% and 10%, with uniform ±20% length jitter around each center. Its expected mean is 9 minutes. Short-video and long-program mixes have their own weighted lengths; custom ranges sample uniformly between chosen bounds. The planner uses the expected mean; processing and output volume use the actual sampled duration. Input duration is workload data, not an edit instruction.
+Source lengths are sampled independently from execution randomness. Presets use weighted durations with ±20% jitter; the mixed preset centers on 2/5/12/30 minutes at 20/40/30/10%, expected mean 9 minutes. Custom ranges sample uniformly. Fixed duration remains available only for explicitly imported controlled tests.
 
-The default is full-program dubbing: selected_share=1. Optional dubbed highlights use the configured selected-source share. The model tracks aggregate highlight minutes, not discrete clip counts or exact edit boundaries. English is the source language; destination branches start with Spanish, French and German and exclude English. Each asset captures its source duration, localization plan, output ratio, destination count and delivery deadline at admission. Queues carry task objects referencing the synthetic asset. Source preparation fans out into speech and vision; editorial planning runs only after both branches finish. A version-matched cache hit bypasses both analysis branches. Editorial planning creates one derivative per locale and an independent indexing task.
-
-Every stage has finite slots. Service time is:
+Arrivals are evenly spaced at an expected rate:
 
 ```
-service_seconds = (fixed_seconds + media_minutes × 60 × RTF) × uniform(0.8, 1.2)
+source_jobs/s = source_hours/day × 60 / (86400 × expected_mean_source_minutes)
 ```
 
-Source stages use actual source minutes; localized stages use full-program minutes or selected highlight minutes according to the captured plan. A dedicated alignment-and-audio-mixing stage runs after voice synthesis and before quality evaluation, with service time and per-minute cost; no actual audio or frames are processed. Profile-specific speech time is captured when an attempt starts. Configuration changes do not rewrite existing task durations. Decreasing capacity does not cancel active work.
+Duration partitions use the maximum chunk size. Scene-informed partitions use synthetic variable boundaries between half the cap and the cap, with the final interval ending exactly at source end. Production scene detection is not implemented. Both modes retain contiguous complete coverage. The source captures its manifest, language count, duration and delivery target at admission.
 
-## Failure and rights semantics
+After segmentation, each chunk is normalized, then produces a job for each destination language. The source is English and targets start with Spanish, French and German. The original source duration remains separate from the chunk length.
 
-Speech attempts have a 2.5% transient failure probability. Failed attempts consume their processing fee, then retry with exponentially increasing delay and jitter until the configured budget is exhausted. Exhaustion quarantines the derivative. Outage stops primary dispatch; in-flight primary calls fail at completion. Approved fallback dispatches to a slower, higher-fee profile. It is a simplified explicit circuit-open state, not a modeled failure-rate detector.
+## Two human gates
 
-Twenty percent of asset identities belong to a seeded license cohort. Revoking that cohort denies admission and prevents final publication of affected in-flight derivatives. This does not implement mid-stage cancellation, third-party deletion or takedown of prior deliveries.
+The browser never creates approvals from elapsed time, a capacity estimate, a score or an acceptance percentage.
 
-Admissions are deferred when pending tasks exceed 3,000 or the ingest queue exceeds 100. This is global backpressure, not multi-tenant fairness.
+Audio approval requires explicit playback initiation, three checklist confirmations and a named demo reviewer. Its record binds package ID, source version, chunk index, language, audio version and content identifier. A replacement/local file creates a new version. Revisions are bounded and require a reason; rejected chunks hold their source/language batch and prevent further queued Sync submissions for that batch.
 
-## Quality
+Sync enqueue and dispatch both validate the approval. The source chunk and approved audio are separate inputs; `dubParams` is not used. Actual API calls are not implemented.
 
-```
-synthetic_score = clamp(profile_mean + 14 × (U1 + U2 + U3 - 1.5), 0, 100)
-```
+The join requires every expected chunk exactly once, checks source interval correspondence and complete coverage, and restores manifest order independently of completion order. Late duplicate completions cannot release a second assembly.
 
-Scores below the configured threshold go to a finite review pool. Review lasts approximately 180 seconds and approves 82% of reviewed derivatives. Rejected derivatives are quarantined rather than silently regenerated. Scores are neither measured WER nor MOS.
+A final human decision requires video playback initiation and continuity, lip-sync and soundtrack confirmations. Final approval binds assembly version/hash, source, language and constituent chunk versions/results. Publish enqueue/dispatch rechecks that decision and delivery rechecks rights. Rejecting the assembly holds it for remediation.
 
-The analytical capacity view uses the Irwin–Hall CDF for the sum of three uniforms to estimate review demand from this same distribution. It ignores retries and revoked rights and assumes all offered demand reaches each stage, deliberately exposing downstream capacity requirements hidden by upstream constraints.
+These are session-local workflow invariants, not production identity/security guarantees. A typed reviewer name is not authenticated identity.
 
-```
-offered_concurrency = tasks_per_hour × mean_service_seconds / 3600
-utilization = offered_concurrency / provisioned_slots
-slots_at_target = ceil(offered_concurrency / 0.75)
-```
+## Preview artifacts
 
-## Costs
+MP3 reference speech was synthesized locally from original demonstration scripts. MP4 references are waveform videos, not visual lip-sync evidence. Users can attach real files locally. SHA-256 is calculated in the browser; no file is sent to a server. Reference modeled artifact identifiers explicitly start with `simulated:` and are not represented as actual provider file hashes.
 
-Illustrative rates: $2.40 per provisioned GPU slot-hour, $0.12 per CPU slot-hour and $30 per staffed reviewer-hour. ASR and vision each have two dedicated GPU slots; speech is configurable. CPU allocation covers three pools: source preparation, dialogue alignment/audio mixing, and quality checks. API, I/O and control-plane overhead is simplified into per-stage fees.
+## Queues, timing and failures
 
-All allocated capacity is billed while idle. Each processing attempt adds its stage's variable fee. Speech profiles charge $0.045, $0.08 or $0.14 per attempted output minute; fallback charges $0.18. These are synthetic fees layered on modeled provisioned capacity, not current vendor prices or a complete hosted-vs-self-hosted TCO model.
+The simulation advances in integer one-second steps. The opening view warms up for 1,800 simulated seconds with **no approvals**. Reset can start at zero or load a warm baseline.
+
+Application/provider service time:
 
 ```
-unit_cost = (compute + processing_attempts + staffed_review + delivery) / accepted_output_minutes
+service_seconds = (fixed_overhead + media_minutes × 60 × processing_factor) × U(0.8, 1.2)
 ```
 
-The numerator includes rejected, failed and unfinished work. A comparison is strongest after draining matched inputs. The profile-comparison view offers the same deterministic source sequence for thirty minutes, disables outages/revocation, and drains for at most three additional hours. A separate catalog RNG controls duration and rights-cohort draws even when input admission is deferred. Offered input sequences therefore match across profiles independently of processing/review randomness. Guardrails can produce different admitted totals at severe overload; those admitted totals and deferred counts are shown and must be checked before treating runs as matched. It flags incomplete runs. Identical seeds do not guarantee identical random outcomes across profiles because branching consumes random draws differently; duration pairing is reproducible, while this remains a synthetic quality comparison rather than a statistically paired measured benchmark.
+ElevenLabs and Sync have independent configured concurrency allowances and outages. Provider attempts have a synthetic 2.5% failure probability; bounded retries use exponential backoff with jitter. An outage stops dispatch and fails modeled in-flight attempts. A video failure preserves already approved audio. Processing factors are editable assumptions, not observed provider performance.
 
-## Metrics
+Human wait is the actual simulated interval until the user records a decision. Estimated review effort is separate: one minute overhead plus media duration × review factor, charged at the configured reviewer hourly rate. Planned reviewers affect the analytical table and zero staffing blocks approval; staffing does not auto-complete a live review.
 
-- Throughput: accepted output minutes in the trailing 300 seconds, annualized to a per-hour rate (scaled to elapsed time if shorter).
-- Observed p95: empirical p95 of the last 5,000 delivered derivative latencies, measured from source admission; unfinished and failed work are excluded.
-- Deadline attainment: delivered outputs in the trailing hour meeting their own admission-time deadline. This is not an arrival-cohort success SLO.
-- Queue age: time since the oldest FIFO task entered its current stage, including retry delay; inspect alongside completion latency.
-- History: the last ninety samples at ten-second intervals; 100 recent events and 120 terminal traces.
+Twenty percent of source identities belong to a seeded rights cohort. Revocation holds admission, prevents Sync and blocks delivery. Previously published takedown is not implemented.
 
-## Deliberate limits
+## Estimated costs
 
-No real model execution, media encoding, tenant scheduler, GPU memory model, dynamic batching, stochastic arrival bursts, regional topology, durable cross-process recovery, provider billing reconciliation, retained-storage growth or post-publication takedown. Those appear as explicit design proposals where relevant. Validate capacity, quality and prices against representative production benchmarks before making an operational commitment.
+- ElevenLabs: submitted target-audio minutes × editable estimated dollars/minute.
+- Sync: submitted output-video seconds × editable estimated dollars/second at the assumed frame rate.
+- Human decisions: `(1 + media_minutes × review_factor) × reviewer_rate / 60` for both gates.
+- Application stages: configured per-minute preparation/reassembly/delivery fees plus illustrative $0.50/hour application overhead.
+
+There is no invented idle provider GPU bill. Attempt fees conservatively remain estimated spend; actual provider refunds, minima, frame-based charges and invoices require reconciliation. Defaults are not an account-specific quote.
+
+```
+cost_per_delivered_minute = all_modeled_spend / full_program_minutes_released
+```
+
+Unfinished, rejected and revised work remains in spend. Individual successful chunks are not delivered programs.
+
+## Analytical planning
+
+Capacity/model estimates sample 512 deterministic source manifests for chunk amplification. Audio approval probability is an independent per-chunk assumption; program-level eligibility requires all chunks. Final acceptance is a separate program-level assumption. Expected costs include audio, accepted-chunk Sync work, both review gates and release volume. Estimates exclude revision loops and retry/refund reconciliation. They do not rank vendor quality or produce live approvals.
+
+## Bounds and limitations
+
+Admission is deferred beyond roughly 3,000 pending tasks or 100 ingest jobs. Event, trace and audit views are bounded. Source/job identifiers are demonstration IDs. In-memory partial joins and decisions are lost on reset/reload.
+
+No actual media splitting, scene understanding, provider calls, rendered lip sync, reassembly, workflow server, durable approval store, authenticated reviewer roles, real webhook delivery, media retention policy or external billing reconciliation is implemented. The public app is a React/GitHub Pages architecture simulator.

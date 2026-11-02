@@ -39,12 +39,15 @@ export default function TraceReplay({ job, snap }) {
           </h3>
           <p>
             {job.sourceMinutes.toFixed(1)}m English source ·{" "}
-            {job.plan === "full" ? "Full-program dubbing" : "Dubbed highlights"}{" "}
-            · {job.languages} language branches · Final outcome:{" "}
-            <b>{job.status}</b>
+            {job.segmentIndex != null
+              ? `Chunk ${job.segmentIndex + 1}/${job.segmentCount} · ${job.minutes.toFixed(1)}m chunk`
+              : `Complete program · ${job.parts?.length || job.segmentCount} chunks`}{" "}
+            · {job.languages} language branches · Status: <b>{job.status}</b>
           </p>
         </div>
-        <span className="tag">{job.model || "Shared source work"}</span>
+        <span className="tag">
+          {job.syncModel || "ElevenLabs → approval → Sync"}
+        </span>
       </div>
       <div className="replay-toolbar">
         <button aria-label="Restart package replay" onClick={() => jump(0)}>
@@ -117,10 +120,20 @@ export default function TraceReplay({ job, snap }) {
         </div>
         <div>
           <span className="eyebrow">
-            {span.stage === "tts" ? `ATTEMPT ${span.attempt} / ` : ""}
+            {["dub", "lipsync"].includes(span.stage)
+              ? `ATTEMPT ${span.attempt} / `
+              : ""}
             {timeLabel(span.start)} → {timeLabel(span.end)}
           </span>
-          <h3>{note.stage?.name}</h3>
+          <h3>
+            {note.stage?.name}
+            {span.segmentIndex != null && (
+              <small className="replay-chunk">
+                {" "}
+                · chunk {span.segmentIndex + 1}
+              </small>
+            )}
+          </h3>
           <p>
             <Terms>{note.text}</Terms>
           </p>
@@ -163,7 +176,7 @@ export default function TraceReplay({ job, snap }) {
           >
             <span>{index + 1}</span>
             {traceCommentary(job, s, steps).stage?.short}
-            {s.stage === "tts" && s.attempt > 1
+            {["dub", "lipsync"].includes(s.stage) && s.attempt > 1
               ? ` · retry ${s.attempt - 1}`
               : ""}
             <small>{s.end - s.start}s</small>

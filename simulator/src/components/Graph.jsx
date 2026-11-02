@@ -55,11 +55,24 @@ function StageNode({ data, selected }) {
         <Terms>{n.tool}</Terms>
       </span>
       <div className="node-stat">
-        <span>{replay || (blocked ? "Circuit open" : value)}</span>
+        <span>
+          {replay ||
+            (n.kind === "human"
+              ? `${s.queue} awaiting decision`
+              : blocked
+                ? "Provider unavailable"
+                : value)}
+        </span>
         <span>
           {!replay && (
             <>
-              {s.active}/{s.capacity} <i>slots</i>
+              {n.kind === "human" ? (
+                "Manual gate"
+              ) : (
+                <>
+                  {s.active}/{s.capacity} <i>jobs</i>
+                </>
+              )}
             </>
           )}
         </span>
@@ -114,19 +127,15 @@ export default function Graph({
           lens,
           blocked:
             !replay &&
-            n.id === "tts" &&
-            snap.config.outage &&
-            !snap.config.fallback,
+            ((n.id === "dub" && snap.config.dubOutage) ||
+              (n.id === "lipsync" && snap.config.syncOutage)),
         },
       })),
     [snap, selected, lens, replay],
   );
   const edges = useMemo(
     () =>
-      (replay?.cached
-        ? [...CONNECTIONS, ["prepare", "clips"]]
-        : CONNECTIONS
-      ).map(([source, target]) => {
+      CONNECTIONS.map(([source, target]) => {
         const a = STAGES.find((n) => n.id === source),
           b = STAGES.find((n) => n.id === target);
         let sh = "right",
@@ -139,12 +148,7 @@ export default function Graph({
           sh = b.y > a.y ? "bottom" : "top";
           th = b.y > a.y ? "top" : "bottom";
         }
-        if (source === "review") {
-          sh = "left";
-          th = "bottom";
-        }
-        const risk =
-          target === "review" || (target === "tts" && snap.config.outage);
+        const risk = ["audio_review", "final_review"].includes(target);
         const onRoute = !replay || replay.edges.has(`${source}-${target}`);
         const reached =
           !replay || (replay.seen.has(source) && replay.seen.has(target));
@@ -185,19 +189,15 @@ export default function Graph({
             height: 15,
           },
           label:
-            source === "prepare" && target === "clips"
-              ? "cached analysis"
-              : source === "clips" && target === "translate"
-                ? replay
-                  ? "locale branch"
-                  : `${snap.config.languages} locales`
-                : target === "review"
-                  ? "needs review"
-                  : source === "review"
-                    ? "approved"
-                    : target === "index"
-                      ? "async index"
-                      : undefined,
+            source === "prepare" && target === "dub"
+              ? `${snap.config.languages} languages / chunk`
+              : source === "audio_review"
+                ? "approved audio only"
+                : source === "final_review"
+                  ? "approved program only"
+                  : target === "reassemble"
+                    ? "wait for all chunks"
+                    : undefined,
           labelStyle: {
             fill: "#7a9a88",
             fontSize: 10,

@@ -1,34 +1,28 @@
 import React from "react";
-import { Braces, Gauge } from "lucide-react";
+import { capacityPlan, planningWorkload } from "../engine.js";
+import { HelpLabel } from "../components/Help.jsx";
 import { $ } from "../utils.js";
-
-import { HelpLabel, Terms } from "../components/Help.jsx";
-import { selectedShare } from "../workload.js";
-import { capacityPlan } from "../engine.js";
-
 export default function Capacity({ snap }) {
-  const rows = capacityPlan(snap.config, snap.scaledGpu);
-  const constrained = rows.filter((r) => r.utilization > 0.75);
+  const rows = capacityPlan(snap.config),
+    work = planningWorkload(snap.config);
   return (
     <div className="workspace-view">
       <div className="view-title">
         <div>
-          <span className="eyebrow">OPERATING ENVELOPE</span>
-          <h2>Capacity before commitments.</h2>
+          <span className="eyebrow">
+            EXTERNAL JOB LIMITS / APPLICATION WORKERS / HUMAN WORK
+          </span>
+          <h2>Plan for chunk amplification and both review gates.</h2>
           <p>
-            <Terms>
-              {
-                "Unconstrained offered demand reveals downstream requirements before upstream bottlenecks hide them."
-              }
-            </Terms>
+            One long source becomes multiple chunks × destination languages,
+            followed by one complete-program review per language.
           </p>
         </div>
-        <Gauge size={30} />
       </div>
       <div className="capacity-summary">
         <div>
           <span>
-            <HelpLabel label="Source demand" />
+            <HelpLabel label="Source hours received" />
           </span>
           <strong>
             {$(snap.config.arrival)}
@@ -36,33 +30,18 @@ export default function Capacity({ snap }) {
           </strong>
         </div>
         <div>
-          <span>
-            <HelpLabel label="Localized output demand" />
-          </span>
-          <strong>
-            {$(
-              ((snap.config.arrival * 60) / 24) *
-                selectedShare(snap.config) *
-                snap.config.languages,
-            )}
-            <small>minutes / hour</small>
-          </strong>
+          <span>Estimated chunks per source</span>
+          <strong>{$(work.meanChunks, 1)}</strong>
         </div>
         <div>
-          <span>
-            <HelpLabel label="Pools above target utilization" />
-          </span>
-          <strong>
-            {constrained.length}
-            <small>of {rows.length} stages</small>
-          </strong>
+          <span>Destination languages</span>
+          <strong>{snap.config.languages}</strong>
         </div>
         <div>
-          <span>
-            <HelpLabel label="Planning target" />
-          </span>
+          <span>Stages above 75% modeled use</span>
           <strong>
-            75<small>% utilization</small>
+            {rows.filter((row) => row.utilization > 0.75).length}
+            <small> / {rows.length}</small>
           </strong>
         </div>
       </div>
@@ -70,77 +49,69 @@ export default function Capacity({ snap }) {
         <table className="capacity-table">
           <thead>
             <tr>
-              <th>
-                <HelpLabel label="Processing stage" />
-              </th>
-              <th>
-                <HelpLabel label="Tasks / hour" />
-              </th>
-              <th>
-                <HelpLabel label="Mean service" />
-              </th>
-              <th>
-                <HelpLabel label="Slots available" />
-              </th>
-              <th>
-                <HelpLabel label="Offered utilization" />
-              </th>
-              <th>
-                <HelpLabel label="Slots at 75%" />
-              </th>
+              {[
+                "Processing stage",
+                "Tasks / hour",
+                "Mean service",
+                "Slots available",
+                "Offered utilization",
+                "Slots at 75%",
+              ].map((label) => (
+                <th key={label}>
+                  <HelpLabel label={label} />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={r.utilization > 1 ? "overloaded" : ""}>
+            {rows.map((row) => (
+              <tr
+                key={row.id}
+                className={row.utilization > 1 ? "overloaded" : ""}
+              >
                 <td>
-                  <span className={"resource-tag " + r.kind}>
-                    <Terms>{r.kind.toUpperCase()}</Terms>
+                  <span className={`resource-tag ${row.kind}`}>
+                    {row.kind === "human"
+                      ? "HUMAN"
+                      : row.kind === "api"
+                        ? "PROVIDER"
+                        : "APP"}
                   </span>
                   <strong>
-                    <HelpLabel label={r.name} />
+                    <HelpLabel label={row.name} />
                   </strong>
                 </td>
-                <td>{$(r.taskRate, 1)}</td>
-                <td>{$(r.serviceSeconds, 1)}s</td>
-                <td>{r.slots}</td>
+                <td>{$(row.taskRate, 1)}</td>
+                <td>{$(row.serviceSeconds / 60, 1)} min</td>
+                <td>{row.slots}</td>
                 <td>
-                  <div className="util-cell">
-                    <span>
-                      {Number.isFinite(r.utilization)
-                        ? $(r.utilization * 100) + "%"
-                        : "BLOCKED"}
-                    </span>
-                    <i>
-                      <b
-                        style={{
-                          width: `${Math.min(100, r.utilization * 100)}%`,
-                        }}
-                      />
-                    </i>
-                  </div>
+                  {Number.isFinite(row.utilization)
+                    ? `${$(row.utilization * 100)}%`
+                    : "BLOCKED"}
                 </td>
-                <td>
-                  <b>{r.required}</b>
-                  {r.required > r.slots && (
-                    <small> +{r.required - r.slots} needed</small>
-                  )}
-                </td>
+                <td>{row.required}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="planning-note">
-        <Braces size={18} />
         <div>
-          <h3>Demand × service time ÷ available capacity</h3>
+          <h3>Planning is not permission to proceed.</h3>
           <p>
-            <Terms>
-              {
-                "Utilization above 100% implies an unstable queue if that demand reaches the stage. This planning model uses mean service times, current profile quality distribution, cache reuse and locale fan-out. It excludes retry overhead and rights rejections. It is a sizing hypothesis to validate with production benchmarks, not a capacity guarantee."
-              }
-            </Terms>
+            Provider slots are configured job allowances; application slots are
+            workers. Human slots are planned reviewers per gate. Human service
+            effort is estimated from media minutes plus one minute of
+            per-decision overhead. The live simulator waits for explicit user
+            decisions regardless of these capacity estimates.
+          </p>
+          <p>
+            Chunk counts come from 512 deterministic sample manifests.
+            Downstream load assumes {snap.config.expectedApproval}% independent
+            audio acceptance per chunk; reassembly requires every chunk. Final
+            review assumes {snap.config.expectedFinalApproval}% program
+            acceptance. The estimate excludes retry/revision overhead and rights
+            denials, and is not a provider latency benchmark.
           </p>
         </div>
       </div>

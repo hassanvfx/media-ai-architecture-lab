@@ -1,249 +1,150 @@
 import React, { useState } from "react";
-import { ArrowDown, GitBranch, Wallet } from "lucide-react";
-import { $, timeLabel } from "../utils.js";
-
-import { HelpLabel, Terms } from "../components/Help.jsx";
-import { compareProfiles } from "../engine.js";
-import { Chart } from "../components/ui.jsx";
-export default function Economics({ snap, baseline }) {
-  const [comparison, setComparison] = useState(null);
-  const m = snap.metrics;
-  const entries = Object.entries(snap.costs);
+import { Wallet } from "lucide-react";
+import { compareProfiles, planningWorkload } from "../engine.js";
+import { SOURCES } from "../catalog.js";
+import { HelpLabel } from "../components/Help.jsx";
+import { $ } from "../utils.js";
+export default function Economics({ snap }) {
+  const [comparison, setComparison] = useState(null),
+    w = planningWorkload(snap.config);
   return (
     <div className="workspace-view">
       <div className="view-title">
         <div>
-          <span className="eyebrow">COST / QUALITY TRADEOFF</span>
-          <h2>Unit economics & model strategy</h2>
+          <span className="eyebrow">PROVIDER FEES + TWO HUMAN REVIEWS</span>
+          <h2>Pay for audio first. Release video spend deliberately.</h2>
           <p>
-            <Terms>
-              {"Retries, idle capacity and human review stay in the numerator."}
-            </Terms>
+            Rejected audio avoids downstream Sync spend. Rejected final video
+            still carries provider and review cost already incurred.
           </p>
         </div>
-        <Wallet size={32} />
+        <Wallet size={30} />
+      </div>
+      <div className="analysis-grid">
+        <div className="analysis-card">
+          <h3>Current run: modeled spend</h3>
+          {[
+            ["dubbing", "ElevenLabs dubbed audio"],
+            ["lipsync", "Sync lip-sync video"],
+            ["review", "Human audio + final review"],
+            ["delivery", "Packaging & delivery"],
+            ["app", "Application processing"],
+          ].map(([key, label]) => (
+            <div className="cost-row" key={key}>
+              <span>
+                <HelpLabel label={label} />
+              </span>
+              <strong>${$(snap.costs[key], 2)}</strong>
+            </div>
+          ))}
+          <div className="formula">
+            <span>Total estimated spend</span>
+            <strong>${$(snap.cost, 2)}</strong>
+            <span>
+              Complete released programs: {snap.outputs} · {$(snap.accepted, 1)}{" "}
+              min
+            </span>
+            <b>
+              {snap.metrics.unitCost == null
+                ? "No delivered denominator yet"
+                : `$${$(snap.metrics.unitCost, 2)} / delivered minute`}
+            </b>
+          </div>
+          <p className="subtle-note">
+            Estimated provider attempt fees are charged at submission, without
+            assuming refunds. Human review cost uses the configured effort
+            assumption when a decision is recorded. These are not invoices.
+          </p>
+        </div>
+        <div className="analysis-card">
+          <h3>Approval changes the spend boundary</h3>
+          <div className="fact-row">
+            <span>Audio versions approved</span>
+            <b>{snap.audioApproved}</b>
+          </div>
+          <div className="fact-row">
+            <span>Audio revisions requested</span>
+            <b>{snap.revisions}</b>
+          </div>
+          <div className="fact-row">
+            <span>Audio packages awaiting review</span>
+            <b>{snap.pendingAudio.length}</b>
+          </div>
+          <div className="fact-row">
+            <span>Sync jobs submitted</span>
+            <b>{snap.syncSubmissions}</b>
+          </div>
+          <div className="fact-row">
+            <span>Assembled programs awaiting final review</span>
+            <b>{snap.pendingFinal.length}</b>
+          </div>
+          <div className="fact-row">
+            <span>Final approvals</span>
+            <b>{snap.finalApproved}</b>
+          </div>
+          <p className="subtle-note">
+            There is no idle self-hosted GPU pool in this provider-led
+            architecture. External concurrency allowances and API usage are
+            separate from application workers and human review.
+          </p>
+        </div>
       </div>
       <div className="comparison-intro">
         <div>
-          <h3>Compare three model strategies on the same workload</h3>
+          <h3>Planning estimate across documented Sync models</h3>
           <p>
-            <Terms>
-              {
-                "Admit 30 minutes of current demand, then drain each pipeline for up to 3 additional hours. Primary providers healthy; rights revocation off. Identical offered source sequence and destination languages, using a separate catalog seed. Admissions can differ under overload; compare the admitted work and deferred counts. Execution randomness varies with the model path."
-              }
-            </Terms>
+            Assumed {snap.config.expectedApproval}% approval per chunk audio and{" "}
+            {snap.config.expectedFinalApproval}% final acceptance. Estimate:{" "}
+            {w.meanChunks.toFixed(1)} chunks per source. All chunks of a
+            language must succeed; one rejection can hold the program. This
+            analytical estimate never creates live approvals.
           </p>
         </div>
         <button
           className="primary-button"
           onClick={() => setComparison(compareProfiles(snap.config))}
         >
-          <GitBranch size={15} />
-          Run controlled comparison
+          Calculate planning estimate
         </button>
       </div>
       {comparison && (
         <div className="strategy-comparison">
-          {comparison.map((r) => (
-            <article key={r.model}>
-              <span className="eyebrow">{r.name}</span>
+          {comparison.map((result) => (
+            <article key={result.model}>
+              <span className="eyebrow">{result.name}</span>
               <strong>
-                {r.unitCost == null ? "—" : "$" + $(r.unitCost, 3)}
-                <small>/ accepted min</small>
+                {result.unitCost == null ? "—" : `$${$(result.unitCost, 2)}`}
+                <small> / expected delivered minute</small>
               </strong>
               <div>
-                <span>Admitted source workload</span>
-                <b>
-                  {r.assets} videos · {$(r.sourceMinutes, 1)} min
-                </b>
+                <span>25 fps legacy reference input</span>
+                <b>${result.rate}/second</b>
               </div>
               <div>
-                <span>
-                  <HelpLabel label="Accepted output" />
-                </span>
-                <b>{$(r.accepted, 1)} min</b>
+                <span>Audio + reviews / source-language</span>
+                <b>${$(result.dubbing + result.review, 2)}</b>
               </div>
               <div>
-                <span>
-                  <HelpLabel label="First-pass yield" />
-                </span>
-                <b>{$(r.yield, 1)}%</b>
-              </div>
-              <div>
-                <span>
-                  <HelpLabel label="Batch makespan" />
-                </span>
-                <b>{$(r.time / 60, 1)} min</b>
-              </div>
-              <div>
-                <span>Deferred inputs</span>
-                <b>{r.deferred}</b>
-              </div>
-              <div>
-                <span>
-                  <HelpLabel label="Unfinished tasks" />
-                </span>
-                <b>{r.pending}</b>
+                <span>Expected Sync spend / source-language</span>
+                <b>${$(result.lipsync, 2)}</b>
               </div>
               <p>
-                {r.pending
-                  ? "Incomplete: do not compare unit cost as a drained run."
-                  : "Fully drained. Includes all staffed time, retries and rejected work."}
+                No quality ranking is inferred from price. Real acceptance,
+                processing latency, account discounts, frame rate and invoice
+                rules require measurement.
               </p>
             </article>
           ))}
         </div>
       )}
-      <div className="analysis-grid">
-        <div className="analysis-card">
-          <h3>
-            Run cost breakdown <span>${$(snap.cost, 2)}</span>
-          </h3>
-          <div className="cost-stack">
-            {entries.map(([k, v], i) => (
-              <span
-                key={k}
-                style={{
-                  width: `${(v / Math.max(snap.cost, 0.001)) * 100}%`,
-                  background: ["#a7e8be", "#82b5dd", "#dbb87f", "#ae9bdb"][i],
-                }}
-              />
-            ))}
-          </div>
-          {entries.map(([k, v], i) => (
-            <div className="cost-row" key={k}>
-              <i
-                style={{
-                  background: ["#a7e8be", "#82b5dd", "#dbb87f", "#ae9bdb"][i],
-                }}
-              />
-              <span>
-                <HelpLabel
-                  label={
-                    k === "inference"
-                      ? "Variable processing"
-                      : k === "compute"
-                        ? "Provisioned compute"
-                        : k === "review"
-                          ? "Staffed human review"
-                          : "Packaging & delivery"
-                  }
-                />
-              </span>
-              <strong>${$(v, 2)}</strong>
-              <small>{$((v / Math.max(snap.cost, 0.001)) * 100)}%</small>
-            </div>
-          ))}
-          <div className="formula">
-            <span>
-              <HelpLabel label="All modeled spend" />
-            </span>
-            <ArrowDown size={13} />
-            <strong>Accepted output minutes</strong>
-            <b>= {m.unitCost == null ? "—" : `$${$(m.unitCost, 3)}`}/min</b>
-          </div>
-        </div>
-        <div className="analysis-card">
-          <h3>Capacity and quality</h3>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="Admitted source assets" />
-            </span>
-            <b>{snap.assetCount}</b>
-          </div>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="Delivered derivatives" />
-            </span>
-            <b>{snap.outputs}</b>
-          </div>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="First-pass gate yield" />
-            </span>
-            <b>{$(m.yield, 1)}%</b>
-          </div>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="Analysis cache hits" />
-            </span>
-            <b>{snap.cacheHits}</b>
-          </div>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="Transient retries" />
-            </span>
-            <b>{snap.retries}</b>
-          </div>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="Quarantined derivatives" />
-            </span>
-            <b>{snap.quarantined}</b>
-          </div>
-          <div className="fact-row">
-            <span>
-              <HelpLabel label="Rights holds / deferred admissions" />
-            </span>
-            <b>
-              {snap.denied} / {snap.deferred}
-            </b>
-          </div>
-          <p className="subtle-note">
-            <Terms>
-              {
-                "Unit cost during warm-up includes work in progress. Compare equal-duration, drained runs for a fair model bake-off."
-              }
-            </Terms>
-          </p>
-        </div>
-        <div className="analysis-card wide">
-          <Chart
-            history={snap.history}
-            field="cost"
-            unit="USD / accepted output minute"
-            label="Unit cost evolution"
-          />
-        </div>
-      </div>
-      {baseline && (
-        <div className="baseline-comparison">
-          <h3>Saved checkpoint vs. current run</h3>
-          <p>
-            <Terms>
-              {"A point-in-time comparison, not a controlled A/B experiment."}
-            </Terms>
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Metric</th>
-                <th>Checkpoint · {timeLabel(baseline.time)}</th>
-                <th>Current · {timeLabel(snap.time)}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ["Accepted minutes", baseline.accepted, snap.accepted, 1],
-                [
-                  "Cost / accepted minute",
-                  baseline.metrics.unitCost,
-                  m.unitCost,
-                  3,
-                ],
-                ["Observed p95 minutes", baseline.metrics.p95, m.p95, 1],
-                ["Queue depth", baseline.metrics.queue, m.queue, 0],
-              ].map(([k, a, b, d]) => (
-                <tr key={k}>
-                  <td>{k}</td>
-                  <td>{$(a, d)}</td>
-                  <td>{$(b, d)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <p className="subtle-note">
+        The estimate samples 512 deterministic source manifests for expected
+        chunk counts and independent per-chunk acceptance assumptions. It
+        excludes revision loops and failed-provider refunds.{" "}
+        <a href={SOURCES.syncBilling} target="_blank" rel="noreferrer">
+          Check current account-specific Sync billing ↗
+        </a>
+      </p>
     </div>
   );
 }

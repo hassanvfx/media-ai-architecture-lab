@@ -195,15 +195,19 @@ export default function Inspect({ onNavigate }) {
                     className="proof-link"
                     onClick={() => onNavigate(q.target, q.stage)}
                   >
-                    {q.target === "architecture"
-                      ? "Inspect component"
-                      : q.target === "economics"
-                        ? "Open model economics"
-                        : q.target === "capacity"
-                          ? "Open capacity plan"
-                          : q.target === "traces"
-                            ? "Inspect execution traces"
-                            : "Read design rationale"}
+                    {q.target === "audio"
+                      ? "Open audio approval"
+                      : q.target === "final"
+                        ? "Open final review"
+                        : q.target === "architecture"
+                          ? "Inspect component"
+                          : q.target === "economics"
+                            ? "Open model economics"
+                            : q.target === "capacity"
+                              ? "Open capacity plan"
+                              : q.target === "traces"
+                                ? "Inspect execution traces"
+                                : "Read design rationale"}
                     <ArrowUpRight size={14} />
                   </button>
                   <button

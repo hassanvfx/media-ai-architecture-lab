@@ -1,174 +1,170 @@
 import React, { useState } from "react";
-import { ArrowRight, ChevronDown, Film, GitBranch, Globe2 } from "lucide-react";
-import {
-  CATALOG_MIXES,
-  DESTINATIONS,
-  durationSummary,
-  selectedShare,
-} from "../workload.js";
+import { ArrowRight, ChevronDown, Headphones, Video } from "lucide-react";
+import { DESTINATIONS, durationSummary, segmentSource } from "../workload.js";
 import { HelpLabel, Terms } from "./Help.jsx";
-
-export default function ProcessOverview({
-  config,
-  sources,
-  onFollow,
-  onConfigure,
-}) {
-  const [expanded, setExpanded] = useState(null);
-  const duration = durationSummary(config);
-  const highlights = config.plan === "highlights";
-  const selected = 30 * selectedShare(config);
-  const destinations = DESTINATIONS.slice(0, config.languages).map(
+export default function ProcessOverview({ config, sources, onNavigate }) {
+  const [expanded, setExpanded] = useState(null),
+    duration = durationSummary(config);
+  const targets = DESTINATIONS.slice(0, config.languages).map(
     ([, name]) => name,
   );
+  let seed = 42;
+  const random = () => {
+    seed = (Math.imul(1664525, seed) + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const example = segmentSource(
+      30,
+      config.segmentationMode,
+      config.chunkMinutes,
+      random,
+    ),
+    audioJobs = example.length * config.languages;
   const phases = [
     [
-      "Receive & check",
-      "An English-language video arrives. Read its actual duration and format; check usage rights and permission to generate translated voices.",
+      "01",
+      "Partition the full source",
+      `Create ordered chunks using ${config.segmentationMode === "scene" ? "scene-informed boundaries" : "a duration grid"}, with a maximum of ${config.chunkMinutes} minutes each. This preserves the whole program; it is not highlight extraction. Scene boundaries in the simulator are synthetic.`,
+      "segment",
     ],
     [
-      "Understand the source",
-      "Normalize the media, transcribe speech, identify speaker turns and analyze visual scenes in parallel. Reuse compatible previous analysis when available.",
+      "02",
+      "Normalize each chunk",
+      "Check codec, duration and timestamps, then prepare compatible provider inputs. Keep the source coverage manifest so every output can be returned to the correct interval.",
+      "prepare",
     ],
     [
-      highlights ? "Select highlight segments" : "Prepare the full program",
-      highlights
-        ? "Propose shorter, meaningful intervals from the source. The selected-source share is a total duration budget, not a number of clips. The simulation aggregates these intervals into one work package per language."
-        : "Keep the complete source timeline. Prepare dialogue and timing for localization; no highlight extraction or shortening is requested.",
+      "03",
+      "ElevenLabs creates the audio",
+      `Generate a separate dubbed recording for each chunk and destination language: ${targets.join(", ")}. Translation and audio voice generation belong to ElevenLabs Dubbing. Retrieve and version the audio before continuing.`,
+      "dub",
     ],
     [
-      "Translate & generate voice",
-      `Create a separate work branch for each destination language (${destinations.join(", ")}). Translate the dialogue, fit it to the timing, then synthesize the translated speech. A production dub also needs alignment and mixing with the original music and effects; the alignment-and-mixing stage models that worker time and cost. Actual audio processing remains a production implementation.`,
+      "04",
+      "A person listens and approves",
+      "Preview each audio track, check meaning, voice and timing, and record an explicit decision. A revision creates a new audio version. No unapproved version can be submitted to Sync.",
+      "audio",
     ],
     [
-      "Check & review",
-      "Evaluate the generated result. Outputs below the quality threshold wait for a human decision; approved results continue, rejected results stop.",
+      "05",
+      "Sync changes the lip movements",
+      "Send the matching source video chunk and the exact approved audio as separate inputs. Do not use combined automatic dubbing: that would bypass the audio review.",
+      "lipsync",
     ],
     [
-      "Package & release",
-      "Recheck rights, then prepare the localized delivery package. The production design targets video with translated audio and timed text; this simulator models processing and outcomes rather than rendering those files.",
+      "06",
+      "Reassemble, then review again",
+      "Wait for every chunk in a source/language batch. Restore their original order, verify no source interval is missing, and present the complete video to a person. Only final approval releases delivery.",
+      "final",
     ],
   ];
   return (
     <section className="process-overview" aria-label="What this pipeline does">
       <div className="process-intro">
         <div>
-          <span className="eyebrow">WHAT ARE WE DOING?</span>
-          <h2>
-            {highlights
-              ? "Create highlights, then dub them into other languages."
-              : "Dub complete videos into other languages."}
-          </h2>
+          <span className="eyebrow">
+            THE SELECTED FLOW / TWO EXPLICIT HUMAN APPROVALS
+          </span>
+          <h2>Preview the audio before changing the video.</h2>
           <p>
-            Dubbing replaces the spoken dialogue with translated speech. The
-            video’s source language is <b>English</b>; the destination languages
-            are <b>{destinations.join(", ")}</b>.
+            The input is a complete English-language video. We split it into
+            ordered chunks, dub each into <b>{targets.join(", ")}</b>, approve
+            the audio, lip-sync the chunks, then reassemble and approve each
+            complete localized program.
           </p>
         </div>
-        <button className="small-outline" onClick={onFollow}>
-          <GitBranch size={16} /> Follow one video
+        <button className="primary-button" onClick={() => onNavigate("audio")}>
+          <Headphones size={16} /> Preview an audio package
         </button>
       </div>
-      <div
-        className="localization-plans"
-        role="group"
-        aria-label="Localization plan"
-      >
-        <button
-          aria-pressed={!highlights}
-          onClick={() => onConfigure({ plan: "full" })}
-        >
-          <Film size={20} />
-          <span>
-            <b>Dub full programs</b>
-            <small>Keep the entire source duration.</small>
-          </span>
+      <div className="provider-flow-story">
+        <span>Ordered source chunks</span>
+        <ArrowRight size={15} />
+        <span className="provider-eleven">ElevenLabs audio</span>
+        <ArrowRight size={15} />
+        <button onClick={() => onNavigate("audio")}>
+          Human audio approval
         </button>
-        <button
-          aria-pressed={highlights}
-          onClick={() =>
-            onConfigure({
-              plan: "highlights",
-              clipRatio: config.clipRatio === 100 ? 20 : config.clipRatio,
-            })
-          }
-        >
-          <Film size={20} />
-          <span>
-            <b>Create & dub highlights</b>
-            <small>Select shorter source segments first.</small>
-          </span>
-        </button>
+        <ArrowRight size={15} />
+        <span className="provider-sync">Sync lip sync</span>
+        <ArrowRight size={15} />
+        <span>Reassembly</span>
+        <ArrowRight size={15} />
+        <button onClick={() => onNavigate("final")}>Final human review</button>
       </div>
-      <p className="plan-change-note">
-        Plan changes apply to newly arriving videos. Packages already in
-        progress keep their captured plan.
-      </p>
       <div className="process-example">
-        <span className="example-label">WORKED EXAMPLE</span>
+        <span className="example-label">30-MINUTE WORKED EXAMPLE</span>
         <span>
-          <b>30 min</b> English video
+          <b>{example.length}</b> ordered chunks
         </span>
-        <ArrowRight size={15} />
+        <ArrowRight size={14} />
         <span>
-          <b>{selected.toFixed(selected % 1 ? 1 : 0)} min</b>{" "}
-          {highlights ? "selected highlights" : "complete program"}
+          <b>{audioJobs}</b> audio approval decisions
         </span>
-        <ArrowRight size={15} />
+        <ArrowRight size={14} />
         <span>
-          <b>{config.languages}</b> destination languages
+          up to <b>{audioJobs}</b> Sync jobs
         </span>
-        <ArrowRight size={15} />
+        <ArrowRight size={14} />
         <span>
-          <b>{(selected * config.languages).toFixed(1)} min</b> planned dubbed
-          output
+          <b>{config.languages}</b> reassembled programs / final reviews
         </span>
       </div>
       <p className="process-example-note">
-        {highlights
-          ? "A clip means a selected interval from the original video—for example, 02:10–03:00. This model tracks total highlight minutes, not individual clip boundaries."
-          : "One source video produces one localized full-program work package per destination language. Translation may need timing adaptation; modeled output duration follows the source timeline."}
+        {config.segmentationMode === "scene"
+          ? "Illustrative synthetic scene plan."
+          : "Duration-based partition."}{" "}
+        Chunk cap: {config.chunkMinutes} min. All 30 source minutes are retained
+        per language. A rejected or missing chunk holds that language’s complete
+        program; successful chunks are not published as a partial result.
       </p>
       <div className="process-phases">
-        {phases.map(([title, description], index) => (
-          <div key={index}>
+        {phases.map(([num, title, description, target], index) => (
+          <div key={num}>
             <button
               aria-expanded={expanded === index}
-              aria-controls={`process-phase-${index}`}
+              aria-controls={`phase-${index}`}
               onClick={() => setExpanded(expanded === index ? null : index)}
             >
-              <span>{String(index + 1).padStart(2, "0")}</span>
+              <span>{num}</span>
               <b>{title}</b>
               <ChevronDown size={14} />
             </button>
-            <p id={`process-phase-${index}`} hidden={expanded !== index}>
+            <p id={`phase-${index}`} hidden={expanded !== index}>
               <Terms>{description}</Terms>
+              <button
+                className="inline-process-link"
+                onClick={() =>
+                  onNavigate(
+                    ["audio", "final"].includes(target)
+                      ? target
+                      : "architecture",
+                    ["audio", "final"].includes(target) ? null : target,
+                  )
+                }
+              >
+                Inspect this boundary →
+              </button>
             </p>
           </div>
         ))}
       </div>
       <details className="process-scope">
-        <summary>How to read the simulation</summary>
+        <summary>What is real, and what is simulated?</summary>
         <p>
-          The graph shows one shared source-analysis path, then a branch per
-          destination language. The searchable-catalog branch runs
-          independently. A node is a processing stage; a queue is work waiting
-          for a worker.{" "}
-          <b>
-            Processing workers and costs are simulated; media files and model
-            outputs are not generated here.
-          </b>{" "}
-          Suggested tools and stage contracts describe a proposed production
-          implementation. The model includes synthetic quality scores,
-          simplified arrivals and linear processing-time estimates. Audio
-          alignment and mixing have a simulated worker stage. Actual audio
-          mixing, visual lip synchronization and frame rendering are not
-          performed here.
+          ElevenLabs Dubbing and Sync’s separate-video/audio API are real
+          documented interfaces. This browser application simulates queues,
+          provider timing, chunk joins, decisions and estimated spend; it makes
+          no provider requests. Reference previews are clearly labeled fixtures.
+          You can attach actual audio/video locally for playback. Source
+          clipping, scene detection, lip-sync rendering and reassembly are
+          modeled, not performed on media here. Review actions are session-local
+          demo decisions; a production system needs authenticated reviewers and
+          durable records.
         </p>
       </details>
       <div className="catalog-story">
         <div>
-          <Globe2 size={17} />
           <HelpLabel label="Source catalog mix" />
           <span>
             {duration.name} · {duration.min.toFixed(1)}–
@@ -177,9 +173,9 @@ export default function ProcessOverview({
           </span>
         </div>
         <p>
-          Each arriving video gets its own duration. Choose a catalog mix in{" "}
-          <b>Model inputs</b> to test different customer catalogs; duration is
-          an input characteristic, not a transformation setting.
+          Source length varies with the received catalog. <b>Chunk duration</b>{" "}
+          is a separate processing limit; it never changes the length of the
+          reassembled program. New settings apply to future arrivals.
         </p>
         {sources?.length > 0 && (
           <div className="source-examples">

@@ -1,41 +1,27 @@
-# Architecture inspection acceptance review
+# Acceptance — batch dubbing with two human gates
 
-## Outcome
+## Selected flow
 
-The reference application covers 50 distinct architecture questions across ten responsibilities, with five questions per responsibility. Each question has a substantive answer and a route to supporting content. Evidence is explicitly classified: 21 interactive demonstrations, 23 proposed design contracts, and 6 execution/leadership plans.
+Source → rights → duration/scene-informed partition → chunk normalization → ElevenLabs audio → human audio approval → Sync lip sync → full-program reassembly → final human approval → delivery.
 
-This meets the requested question-coverage criterion. It does not turn the proposed production contracts into implemented integrations. The main limits remain visible: synthetic quality and rates, simplified provider behavior, no multi-tenant scheduler or real media processing, and no durable external recovery or takedown execution.
+Ten graph stages, two mandatory manual decisions, variable source lengths, ordered source coverage, separate target-language batches and fifty selected-flow inspection questions.
 
-## Verification
+## Automated outcomes
 
-- Twenty-four automated checks passed, covering deterministic runs, no-arrival economics, outage/fallback recovery, overload, model quality/review pressure, source-branch join, locale fan-out, rights rechecks, bounded retry exhaustion, delayed autoscaling, cost reconciliation, imported configuration limits, exact constant-rate admissions, capacity calculations, and review coverage.
-- Production build completed successfully, with separate graph and application bundles and relative asset paths.
-- Browser rendered all 50 answers and 50 evidence links. Search found the exactly-once publication answer; its evidence action opened the publisher contract.
-- Controlled profile comparison reproduced equal offered source-duration sequences. Admitted totals and deferred inputs are disclosed; blocked reviewer cases are explicitly flagged as undrained.
-- Capacity planning rendered all 13 resource stages and the expected baseline planning constraints.
-- Outage and fallback switches updated the configured state in the production build.
-- Responsibility filtering returned the expected five reliability questions.
-- A 390-pixel responsive check found no horizontal document overflow in the inspection view.
-- No browser console errors were observed in the checked production session.
+All 40 automated tests pass. The production build succeeds with relative asset paths and packaged reference MP3/MP4 previews.
 
-## Presentation gate
+The tests cover deterministic unattended state; no automatic approval; playback/checklist/name requirements; exact version/hash/source/chunk/language approval; revisions and bounded revision budget; rejection before Sync spend; partial joins; out-of-order reassembly; complete-program duration; final review and rejection; stale final artifacts; local preview versioning; language isolation; zero reviewers; rights before Sync/delivery; provider outages and bounded retries; estimated cost reconciliation; planning/live-decision separation; configuration whitelisting; invalid coverage; duplicate callbacks; source duration/segmentation capture; glossary tokenization and trace commentary.
 
-Use the seven-minute walkthrough in DEMO.md. Be ready to explain why completion-only p95 and delivered-only deadline attainment can hide unfinished work, why model comparisons require matching inputs and drain status, and which controls are proposed rather than simulated. Support leadership and past-delivery claims with real personal evidence.
+## Browser verification
 
-## Deployment gate
+Verified a complete local interaction: start an audio preview, confirm checks, approve audio, advance simulated processing, observe reassembly held at final review, start the video preview, confirm final checks, approve and observe delivery. Both approve buttons initially remain disabled. Reference labels are visible and the reference MP3/MP4 files are valid. The checked production preview reported no console errors.
 
-The public repository is https://github.com/hassanvfx/media-ai-architecture-lab. The repository-root GitHub Actions workflow tests, builds and publishes the static simulator and academy to https://hassanvfx.github.io/media-ai-architecture-lab/.
+Multi-chunk coverage, missing/rejected chunks, version mismatches, language isolation and duplicate completion behavior are also tested at engine level. Production provider quality is not inferred from these tests.
 
-## Single-package replay
+Additional browser checks verified that a locally loaded MP3 creates audio v2 and resets approval checks, a new run clears prior form state, scene-informed mode updates the process example, and the capacity view contains ten stages. At 390px the document has no horizontal overflow.
 
-Twenty-four automated checks pass, including four replay checks for chronological parallel spans, cache/review routing, retry narration and historical configuration fidelity. Package selection pins an outcome independently of live updates. Replay uses recorded spans and labels proposed contracts separately.
+## Delivery and scope
 
-Browser verification covered the architecture entry point, next-step navigation, graph-node jumps, slider navigation to the final outcome, playback restart, pause, empty outcome filtering and selection recovery. Desktop (1440px) and mobile (390px) checks found no horizontal document overflow; the checked production session reported no console errors.
+The public repository is https://github.com/hassanvfx/media-ai-architecture-lab and GitHub Pages deploys `main` to https://hassanvfx.github.io/media-ai-architecture-lab/.
 
-## Process-comprehension and workload revision
-
-A designer performed an adversarial review and a second sanity check; findings and changes are recorded in DESIGN_REVIEW.md. The overview now states English-source dubbing, identifies destination languages, separates full programs from highlights and shows a worked source-to-output example. Six phase disclosures expose the process. The graph includes an explicit audio-alignment/mixing worker before quality checks.
-
-New tests verify variable source-length bounds and expected mean, custom-range normalization, captured per-package plans and durations, non-English destinations, timing/mixing order, legacy fixed-size test compatibility and technical-term tokenization. Separate workload randomness preserves the offered catalog independently of model execution.
-
-Browser checks verified the 30-minute full-program example (90 planned output minutes across three languages) and highlight example (6 selected minutes, 18 planned output minutes), custom duration controls, per-package source lengths, the mixing span, glossary search, GPU explanations, Escape dismissal and accessible switches. Desktop (1440px) and mobile (390px) checks found no horizontal document overflow. A mobile explanation remained inside the viewport; capacity planning displayed 13 stages. No console errors were observed.
+No real provider calls, clipping, scene detection, lip-sync rendering, reassembly, durable approval service or authenticated review identities are implemented. User-selected preview files stay local to the current browser session. Demo decisions and preview references reset on reload or a new run.

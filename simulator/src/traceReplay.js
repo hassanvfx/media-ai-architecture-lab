@@ -1,96 +1,113 @@
-import { stageInfo } from "./workload.js";
 import { STAGES, CONNECTIONS } from "./catalog.js";
-
-// Replay recorded spans in completion order; parallel branches are not serialized.
 export function traceSteps(job) {
-  return (job?.path || [])
-    .map((span, index) => ({ ...span, index }))
-    .sort((a, b) => a.end - b.end || a.start - b.start || a.index - b.index);
+  const spans = (job?.path || []).map((span, index) => ({ ...span, index }));
+  if (job?.status?.startsWith("awaiting ") || job?.status?.startsWith("in "))
+    spans.push({
+      stage: job.stage,
+      start: job._active ? job.startedAt : job.queuedAt,
+      end: job.ended,
+      queuedAt: job.queuedAt,
+      attempt: job.attempt || 1,
+      audioVersion: job.audioVersion,
+      videoVersion: job.videoVersion,
+      segmentIndex: job.segmentIndex,
+      inProgress: true,
+      waiting: !job._active,
+      index: spans.length,
+    });
+  return spans.sort(
+    (a, b) => a.end - b.end || a.start - b.start || a.index - b.index,
+  );
 }
 export function traceState(job, steps, cursor) {
-  const current = steps[cursor];
-  const time = current?.end ?? job.born;
-  const seen = new Set(steps.slice(0, cursor + 1).map((s) => s.stage));
-  const route = new Set(steps.map((s) => s.stage));
+  const current = steps[cursor],
+    time = current?.end ?? job.born,
+    seen = new Set(steps.slice(0, cursor + 1).map((span) => span.stage)),
+    route = new Set(steps.map((span) => span.stage));
   return {
-    config: { plan: job.plan || (job.clipRatio < 100 ? "highlights" : "full") },
     current: current?.stage,
     seen,
     route,
     time,
     edges: new Set(
-      [...CONNECTIONS, ["prepare", "clips"]]
-        .filter(
-          ([a, b]) =>
-            route.has(a) &&
-            route.has(b) &&
-            !(a === "qc" && b === "publish" && route.has("review")) &&
-            !(a === "prepare" && b === "clips" && route.has("asr")),
-        )
-        .map(([a, b]) => `${a}-${b}`),
+      CONNECTIONS.filter(([a, b]) => route.has(a) && route.has(b)).map(
+        ([a, b]) => `${a}-${b}`,
+      ),
     ),
-    cached: route.has("clips") && !route.has("asr") && !route.has("vision"),
     states: Object.fromEntries(
-      STAGES.map((n) => {
-        const spans = steps.filter((s) => s.stage === n.id);
-        const state =
-          n.id === current?.stage
-            ? "At this step"
-            : spans.some((s) => s.start < time && s.end > time)
-              ? "In parallel"
-              : seen.has(n.id)
-                ? "Completed"
-                : route.has(n.id)
-                  ? "Upcoming"
-                  : "Outside this trace";
-        return [n.id, state];
-      }),
+      STAGES.map((stage) => [
+        stage.id,
+        stage.id === current?.stage
+          ? "At this step"
+          : steps.some(
+                (span) =>
+                  span.stage === stage.id &&
+                  span.start < time &&
+                  span.end > time,
+              )
+            ? "In parallel"
+            : seen.has(stage.id)
+              ? "Completed"
+              : route.has(stage.id)
+                ? "Upcoming"
+                : "Outside this trace",
+      ]),
     ),
   };
 }
 export function traceCommentary(job, span, steps) {
-  const stage = stageInfo(
-    STAGES.find((n) => n.id === span.stage),
-    { plan: job.plan || (job.clipRatio < 100 ? "highlights" : "full") },
-  );
-  const has = (id) => steps.some((s) => s.stage === id);
-  const laterAttempt = steps.some(
-    (s) => s.stage === "tts" && s.attempt > span.attempt,
-  );
-  const notes = {
-    ingest: `${job.sourceMinutes?.toFixed(1) ?? "unrecorded"} minutes of source media entered as ${job.asset}. Shared source work happens once before any locale-specific processing.`,
-    policy:
-      job.status === "rights hold" && !has("prepare")
-        ? "Admission stopped this package because its rights were revoked. No normalization or model work followed."
-        : "This package passed the simulated admission rights check and continued to normalization. Delivery will require another rights check.",
-    prepare:
-      has("clips") && !has("asr")
-        ? "A version-matched analysis cache hit bypassed both speech and visual analysis. The package continued directly to editorial planning."
-        : "Normalization completed. Speech and visual analysis were dispatched as parallel branches; editorial planning waits for both results.",
-    asr: "The speech-analysis branch completed. Its transcript evidence joins the visual branch before editorial planning; span timing shows whether the other branch is still running.",
-    vision:
-      "The visual-analysis branch completed. The workflow joins both analysis results before choosing the edit plan, preserving shared source lineage.",
-    clips: `${job.plan === "full" ? "The full program was retained" : "Selected source intervals were grouped into a highlight plan"}. The localization plan produced ${job.languages} language branches. This replay follows ${job.locale?.toUpperCase() || "the source"}; sibling locales are separate traces. Catalog indexing is dispatched independently and is not recorded in this delivery trace.`,
-    translate: `The ${job.locale?.toUpperCase()} branch completed translation and timing. The ${job.minutes?.toFixed(1)} ${job.plan === "full" ? "full-program" : "selected highlight"} output minutes continue to voice synthesis.`,
-    tts: laterAttempt
-      ? `Speech attempt ${span.attempt} failed. The package returned to the speech queue for a bounded retry; the next attempt's wait includes backoff and queueing.`
-      : job.status === "retry budget exhausted"
-        ? `Speech attempt ${span.attempt} exhausted the retry budget. The package was quarantined without entering quality evaluation or publication.`
-        : `Speech attempt ${span.attempt} completed using ${span.model || job.model || "the recorded"} profile${(span.fallback ?? job.fallback) ? " through the fallback provider" : ""}. The generated speech proceeds to timing alignment and audio mixing before quality evaluation.`,
-    mix: "The translated speech was placed on the program timeline and the modeled audio-mixing stage completed. In production, this step requires segment timestamps and clean music-and-effects stems; excessive timing changes must trigger adaptation instead of blindly stretching speech. The simulator records timing and cost, not a rendered soundtrack.",
-    qc: `The synthetic quality score was ${job.score?.toFixed(1) ?? "unrecorded"}${job.qualityThreshold != null ? ` against a threshold of ${job.qualityThreshold}` : ""}. ${has("review") ? "This package was routed to editorial review instead of direct publication." : "This package took the automated publication path."} This score is illustrative, not a measured media-quality result.`,
-    review:
-      job.status === "editorial rejection"
-        ? "Editorial review rejected this output. The simulation quarantined the package; there is no publication span."
-        : "Editorial review approved this output. Human service time and queueing add to delivery latency and operating cost.",
-    publish:
-      job.status === "rights hold"
-        ? "The final rights check blocked publication, even though transformation work had completed. The package ended on rights hold."
-        : `The final rights check passed and ${job.minutes?.toFixed(1)} minutes were accepted for ${job.locale?.toUpperCase()}. End-to-end elapsed time: ${((job.ended - job.born) / 60).toFixed(1)} minutes.`,
-  };
+  const stage = STAGES.find((n) => n.id === span.stage),
+    chunk =
+      span.segmentIndex != null
+        ? `Chunk ${span.segmentIndex + 1}`
+        : "This source";
+  let text;
+  if (span.inProgress) {
+    text =
+      span.stage === "audio_review"
+        ? `Audio v${job.audioVersion} is held for a human decision. Preview the recording in Audio approval. Sync cannot start for this chunk until the current version and content identifier are approved.`
+        : span.stage === "final_review"
+          ? `All ${job.parts?.length || job.segmentCount} chunks have been reassembled. Video v${job.videoVersion} now waits for a second human decision. It has not been delivered.`
+          : `${stage?.name} is ${span.waiting ? "queued" : "in progress"} at this snapshot. This span is unfinished; elapsed time is not a measured completed service time.`;
+  } else {
+    const notes = {
+      ingest: `${job.sourceMinutes?.toFixed(1)} minutes of source video arrived as ${job.asset}. The original is immutable and remains the reference for all ordered chunks and destination languages.`,
+      policy:
+        job.status === "rights hold" &&
+        !steps.some((s) => s.stage === "segment")
+          ? "Rights or consent prevented processing before provider spend."
+          : "The source passed admission checks for audio translation, voice use and visual modification. Permission must still be valid before Sync and publication.",
+      segment: `The complete source was partitioned into ${job.segmentCount || job.segmentManifest?.length} contiguous chunks. ${job.segmentationMode === "scene" ? "Synthetic scene-informed boundaries were used" : "Duration-based boundaries were used"}. This is batching for processing, not selecting highlights or discarding content.`,
+      prepare: `${chunk} was normalized and validated for the external providers. Source start/end timestamps remain in the manifest so later outputs can be reassembled correctly.`,
+      dub:
+        span.outcome === "failed"
+          ? `${chunk}: the modeled ElevenLabs request failed. A bounded retry retains the chunk identity; it does not create a human approval.`
+          : `${chunk}: ElevenLabs audio v${span.audioVersion} was produced for ${job.locale?.toUpperCase()}. The provider boundary includes transcription/translation and audio dubbing. The result stopped at the mandatory audio-review gate.`,
+      audio_review:
+        span.decision === "approved"
+          ? `${chunk}: ${span.reviewer} explicitly approved audio v${span.audioVersion}. Decision ${span.approvalId} binds that exact audio content identifier and source version. Only this approved recording can proceed to Sync.`
+          : span.decision === "changes_requested"
+            ? `${chunk}: ${span.reviewer} requested a new audio version. The old version has no release permission; the replacement must be previewed and approved again.`
+            : `${chunk}: the audio was rejected. This source/language batch is held and the rejected chunk cannot incur Sync processing.`,
+      lipsync:
+        span.outcome === "failed"
+          ? `${chunk}: the modeled Sync attempt failed. The approved audio is retained; a video-provider error does not require re-dubbing it.`
+          : `${chunk}: Sync used the source video interval and approved audio v${span.audioVersion}. The audio approval ID was ${span.approvalId}. This is the separate video+audio API path, without dubParams or a second audio-generation step.`,
+      reassemble: `Every required chunk of ${job.asset}/${job.locale?.toUpperCase()} completed. The join verified contiguous source coverage and restored ${job.parts?.length || job.segmentCount} chunks to the original ${job.sourceMinutes?.toFixed(1)}-minute order. The complete video then stopped for final human review.`,
+      final_review:
+        span.decision === "approved"
+          ? `${span.reviewer} approved assembled video v${span.videoVersion}, including continuity, lip movements and soundtrack checks. This second approval binds the assembly and its constituent chunk lineage.`
+          : `The assembled video was held after final review. Provider completion did not automatically authorize delivery.`,
+      publish:
+        job.status === "rights hold"
+          ? "The final rights check prevented delivery, despite completed provider work and review."
+          : `The complete ${job.minutes?.toFixed(1)}-minute ${job.locale?.toUpperCase()} program was released only after final human approval. The source, ordered chunk outputs, audio decisions and final decision remain linked.`,
+    };
+    text = notes[span.stage] || stage?.purpose;
+  }
   return {
     stage,
-    text: notes[span.stage] || stage?.purpose,
+    text,
     wait:
       span.queuedAt == null ? null : Math.max(0, span.start - span.queuedAt),
     duration: span.end - span.start,

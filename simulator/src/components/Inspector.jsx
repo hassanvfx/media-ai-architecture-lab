@@ -1,38 +1,29 @@
 import React, { useState } from "react";
-import {
-  Activity,
-  ArrowUpRight,
-  ExternalLink,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { ArrowUpRight, X } from "lucide-react";
+import { STAGES } from "../catalog.js";
 import { HelpLabel, Terms } from "./Help.jsx";
-import { stageInfo } from "../workload.js";
-import { STAGES, PROFILES } from "../catalog.js";
-import { $ } from "../utils.js";
-import { Icon, Slider, Toggle } from "./ui.jsx";
-export default function Inspector({ id, snap, onClose, onConfigure }) {
-  const [tab, setTab] = useState("design");
-  const original = STAGES.find((x) => x.id === id);
-  const n = stageInfo(original, snap.config);
-  const s = snap.stages[id];
+import { Icon } from "./ui.jsx";
+export default function Inspector({ id, snap, onClose, onNavigate }) {
+  const [tab, setTab] = useState("design"),
+    n = STAGES.find((stage) => stage.id === id),
+    s = snap.stages[id];
+  if (!n) return null;
   return (
     <aside className="inspector">
       <div className="inspector-top">
-        <span>COMPONENT DETAIL</span>
+        <span>STAGE CONTRACT</span>
         <button
           className="icon-button inspector-close"
-          onClick={onClose}
           aria-label="Close inspector"
+          onClick={onClose}
         >
-          <X size={16} />
+          <X size={17} />
         </button>
-        <span className="mono">
-          {String(STAGES.indexOf(original) + 1).padStart(2, "0")} /{" "}
-          {STAGES.length}
+        <span>
+          {STAGES.indexOf(n) + 1} / {STAGES.length}
         </span>
       </div>
-      <div className={"inspector-icon " + n.kind}>
+      <div className={`inspector-icon ${n.kind}`}>
         <Icon name={n.icon} size={25} />
       </div>
       <h2>
@@ -44,40 +35,43 @@ export default function Inspector({ id, snap, onClose, onConfigure }) {
       <div className="stage-metrics">
         <div>
           <strong>{s.queue}</strong>
-          <span>queued</span>
+          <span>waiting</span>
         </div>
         <div>
-          <strong>
-            {s.active}
-            <small>/{s.capacity}</small>
-          </strong>
-          <span>active slots</span>
+          <strong>{s.active}</strong>
+          <span>
+            {n.kind === "human" ? "automatic jobs (none)" : "active jobs"}
+          </span>
         </div>
         <div>
-          <strong>
-            {$(s.age, 1)}
-            <small>m</small>
-          </strong>
+          <strong>{s.age.toFixed(1)}m</strong>
           <span>oldest wait</span>
         </div>
       </div>
+      {n.kind === "human" && (
+        <button
+          className="primary-button inspector-review-action"
+          onClick={() => onNavigate(id === "audio_review" ? "audio" : "final")}
+        >
+          Open {id === "audio_review" ? "audio approval" : "final video review"}{" "}
+          <ArrowUpRight size={15} />
+        </button>
+      )}
       <div className="small-tabs">
-        {["design", "contract", "tuning"].map((t) => (
+        {["design", "contract"].map((value) => (
           <button
-            key={t}
-            className={tab === t ? "active" : ""}
-            onClick={() => setTab(t)}
+            className={tab === value ? "active" : ""}
+            key={value}
+            onClick={() => setTab(value)}
           >
-            {t}
+            {value}
           </button>
         ))}
       </div>
       {tab === "design" ? (
         <>
           <section className="detail-section">
-            <h3>
-              Suggested stack <ExternalLink size={12} />
-            </h3>
+            <h3>Verified tools & interfaces</h3>
             {n.stack.map(([tool, why, url]) => (
               <a
                 className="tool-card"
@@ -106,12 +100,8 @@ export default function Inspector({ id, snap, onClose, onConfigure }) {
               <Terms>{n.failure}</Terms>
             </p>
           </section>
-          <div className="watch-metrics">
-            <Activity size={14} />
-            <span>{n.metric}</span>
-          </div>
         </>
-      ) : tab === "contract" ? (
+      ) : (
         <>
           <section className="detail-section">
             <h3>Input contract</h3>
@@ -120,102 +110,11 @@ export default function Inspector({ id, snap, onClose, onConfigure }) {
             <code className="contract">{n.output}</code>
           </section>
           <section className="detail-section">
-            <h3>Implementation sketch</h3>
+            <h3>Production integration sketch</h3>
             <pre>{n.code}</pre>
             <p className="muted">
-              Illustrative pseudocode; the browser simulates this stage.
-            </p>
-          </section>
-          <div className="contract-note">
-            <ShieldCheck size={16} />
-            <span>
-              Every stage carries tenant_id, asset_id, model version and a trace
-              identifier.
-            </span>
-          </div>
-        </>
-      ) : (
-        <>
-          <section className="detail-section">
-            <h3>Live controls</h3>
-            {id === "tts" ? (
-              <>
-                <Slider
-                  label="Speech slots"
-                  value={snap.config.gpu}
-                  min={1}
-                  max={24}
-                  onChange={(v) => onConfigure({ gpu: v })}
-                />
-                <Toggle
-                  label="Approved fallback"
-                  value={snap.config.fallback}
-                  onChange={(v) => onConfigure({ fallback: v })}
-                />
-                <Toggle
-                  label="Primary outage"
-                  value={snap.config.outage}
-                  onChange={(v) => onConfigure({ outage: v })}
-                />
-              </>
-            ) : id === "qc" ? (
-              <Slider
-                label="Acceptance threshold"
-                value={snap.config.quality}
-                min={50}
-                max={99}
-                onChange={(v) => onConfigure({ quality: v })}
-              />
-            ) : id === "review" ? (
-              <Slider
-                label="Reviewers"
-                value={snap.config.reviewers}
-                min={0}
-                max={16}
-                onChange={(v) => onConfigure({ reviewers: v })}
-              />
-            ) : id === "prepare" ? (
-              <Slider
-                label="CPU slots per stage"
-                value={snap.config.cpu}
-                min={1}
-                max={24}
-                onChange={(v) => onConfigure({ cpu: v })}
-              />
-            ) : id === "policy" ? (
-              <Toggle
-                label="Revoke license cohort"
-                hint="20% of incoming asset identities"
-                value={snap.config.revoked}
-                onChange={(v) => onConfigure({ revoked: v })}
-              />
-            ) : (
-              <Slider
-                label="Catalog input"
-                value={snap.config.arrival}
-                min={0}
-                max={4800}
-                step={60}
-                suffix="h/day"
-                onChange={(v) => onConfigure({ arrival: v })}
-              />
-            )}
-            <p>
-              Parameter changes affect new admissions or future stage starts.
-              Work already in flight keeps its sampled service time.
-            </p>
-          </section>
-          <section className="detail-section">
-            <h3>Service-time assumption</h3>
-            <pre>
-              {id === "tts"
-                ? `2s + output_minutes × 60 × ${snap.config.outage ? 0.85 : PROFILES[snap.config.model].rtf}`
-                : `${n.fixed}s + media_minutes × 60 × ${n.rtf}`}
-              <br />× seeded jitter [0.8, 1.2]
-            </pre>
-            <p>
-              These are editable experiment assumptions, not vendor benchmarks.
-              See Model notes for scope and limitations.
+              Illustrative orchestration sketch. Provider details come from
+              linked documentation; the browser makes no API calls.
             </p>
           </section>
         </>
